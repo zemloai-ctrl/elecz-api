@@ -769,6 +769,29 @@ scheduler.add_job(update_spot_prices,     "cron", minute=5)
 scheduler.add_job(update_contract_prices, "cron", hour=2)
 scheduler.start()
 
+
+# ─── MCP Server (thread) ───────────────────────────────────────────────────
+
+def start_mcp_server():
+    """Start FastMCP server in background thread."""
+    try:
+        import threading
+        import subprocess
+        import sys
+        mcp_port = int(os.environ.get("MCP_PORT", 8001))
+        logger.info(f"Starting MCP server on port {mcp_port}...")
+        subprocess.Popen([
+            sys.executable, "mcp_server.py"
+        ], env={**os.environ, "MCP_PORT": str(mcp_port)})
+    except Exception as e:
+        logger.error(f"MCP server start failed: {e}")
+
+# Start MCP server when app starts
+import threading
+mcp_thread = threading.Thread(target=start_mcp_server, daemon=True)
+mcp_thread.start()
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
