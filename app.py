@@ -26,32 +26,113 @@ REDIS_TTL_SPOT     = 3600    # 1 hour
 REDIS_TTL_CONTRACTS = 86400  # 24 hours
 
 PROVIDER_URLS = {
-    "tibber":              "https://tibber.com/fi/sahkosopimus",
-    "helen":               "https://www.helen.fi/sahko/sopimukset",
-    "fortum":              "https://www.fortum.fi/sahkosopimukset",
-    "vattenfall":          "https://www.vattenfall.fi/sahko",
-    "oomi":                "https://oomi.fi/sahkosopimus",
-    "nordic_green_energy": "https://www.nordicgreenenergy.com/fi",
-    "vare":                "https://www.vare.fi/sahkosopimus",
-    "cheap_energy":        "https://www.cheapenergy.fi",
+    # Finland
+    "FI": {
+        "tibber":              "https://tibber.com/fi/sahkosopimus",
+        "helen":               "https://www.helen.fi/sahko/sopimukset",
+        "fortum":              "https://www.fortum.fi/sahkosopimukset",
+        "vattenfall":          "https://www.vattenfall.fi/sahko",
+        "oomi":                "https://oomi.fi/sahkosopimus",
+        "nordic_green_energy": "https://www.nordicgreenenergy.com/fi",
+        "vare":                "https://www.vare.fi/sahkosopimus",
+        "cheap_energy":        "https://www.cheapenergy.fi",
+    },
+    # Sweden
+    "SE": {
+        "tibber":        "https://tibber.com/se/elpris",
+        "fortum":        "https://www.fortum.se/elavtal",
+        "vattenfall":    "https://www.vattenfall.se/elavtal",
+        "eon":           "https://www.eon.se/elavtal",
+        "skekraft":      "https://www.skekraft.se/el/elavtal",
+        "greenely":      "https://www.greenely.se/elavtal",
+        "godel":         "https://www.godel.se/elavtal",
+        "gotaenergi":    "https://www.gotaenergi.se/elavtal",
+    },
+    # Norway
+    "NO": {
+        "tibber":        "https://tibber.com/no/strom",
+        "fjordkraft":    "https://www.fjordkraft.no/strom",
+        "kildenkraft":   "https://www.kildenkraft.no",
+        "kraftriket":    "https://www.kraftriket.no",
+        "astrom":        "https://www.astrom.no",
+        "nte":           "https://www.nte.no/strom",
+        "lyse":          "https://www.lyse.no/strom",
+    },
+    # Denmark
+    "DK": {
+        "tibber":        "https://tibber.com/dk/el",
+        "norlys":        "https://www.norlys.dk/el",
+        "ok":            "https://www.ok.dk/el",
+        "modstrom":      "https://www.modstrom.dk",
+        "ewii":          "https://www.ewii.dk/el",
+        "vindstod":      "https://www.vindstod.dk",
+        "nettopower":    "https://www.nettopower.dk",
+        "cheap_energy":  "https://www.cheapenergy.dk",
+    },
 }
 
 PROVIDER_DIRECT_URLS = {
-    "tibber":              "https://tibber.com/fi",
-    "helen":               "https://www.helen.fi/sahko/sopimukset",
-    "fortum":              "https://www.fortum.fi/sahkosopimukset",
-    "vattenfall":          "https://www.vattenfall.fi/sahko/sahkosopimus",
-    "oomi":                "https://oomi.fi/sahkosopimus",
-    "nordic_green_energy": "https://www.nordicgreenenergy.com/fi/sahkosopimus",
-    "vare":                "https://www.vare.fi/sahkosopimus",
-    "cheap_energy":        "https://www.cheapenergy.fi",
+    # Finland
+    "FI": {
+        "tibber":              "https://tibber.com/fi",
+        "helen":               "https://www.helen.fi/sahko/sopimukset",
+        "fortum":              "https://www.fortum.fi/sahkosopimukset",
+        "vattenfall":          "https://www.vattenfall.fi/sahko/sahkosopimus",
+        "oomi":                "https://oomi.fi/sahkosopimus",
+        "nordic_green_energy": "https://www.nordicgreenenergy.com/fi/sahkosopimus",
+        "vare":                "https://www.vare.fi/sahkosopimus",
+        "cheap_energy":        "https://www.cheapenergy.fi",
+    },
+    # Sweden
+    "SE": {
+        "tibber":        "https://tibber.com/se",
+        "fortum":        "https://www.fortum.se/elavtal",
+        "vattenfall":    "https://www.vattenfall.se/elavtal",
+        "eon":           "https://www.eon.se/elavtal",
+        "skekraft":      "https://www.skekraft.se/el/elavtal",
+        "greenely":      "https://www.greenely.se/elavtal",
+        "godel":         "https://www.godel.se/elavtal",
+        "gotaenergi":    "https://www.gotaenergi.se/elavtal",
+    },
+    # Norway
+    "NO": {
+        "tibber":        "https://tibber.com/no",
+        "fjordkraft":    "https://www.fjordkraft.no/strom",
+        "kildenkraft":   "https://www.kildenkraft.no",
+        "kraftriket":    "https://www.kraftriket.no",
+        "astrom":        "https://www.astrom.no",
+        "nte":           "https://www.nte.no/strom",
+        "lyse":          "https://www.lyse.no/strom",
+    },
+    # Denmark
+    "DK": {
+        "tibber":        "https://tibber.com/dk",
+        "norlys":        "https://www.norlys.dk/el",
+        "ok":            "https://www.ok.dk/el",
+        "modstrom":      "https://www.modstrom.dk",
+        "ewii":          "https://www.ewii.dk/el",
+        "vindstod":      "https://www.vindstod.dk",
+        "nettopower":    "https://www.nettopower.dk",
+        "cheap_energy":  "https://www.cheapenergy.dk",
+    },
 }
 
 ZONES = {
-    "FI": "10YFI-1--------U",
-    "SE": "10YSE-1--------K",
-    "NO": "10YNO-0--------C",
-    "DK": "10Y1001A1001A65H",
+    "FI":  "10YFI-1--------U",
+    "SE1": "10Y1001A1001A44P",  # Luleå
+    "SE2": "10Y1001A1001A45N",  # Sundsvall
+    "SE3": "10Y1001A1001A46L",  # Stockholm
+    "SE4": "10Y1001A1001A47J",  # Malmö
+    "SE":  "10Y1001A1001A46L",  # Default SE3 Stockholm
+    "NO1": "10YNO-1--------2",  # Oslo
+    "NO2": "10YNO-2--------T",  # Kristiansand
+    "NO3": "10YNO-3--------J",  # Trondheim
+    "NO4": "10YNO-4--------9",  # Tromsø
+    "NO5": "10Y1001A1001A48H",  # Bergen
+    "NO":  "10YNO-1--------2",  # Default NO1 Oslo
+    "DK1": "10YDK-1--------W",  # Jylland
+    "DK2": "10YDK-2--------M",  # Sjælland
+    "DK":  "10YDK-1--------W",  # Default DK1
 }
 
 # ─── App init ──────────────────────────────────────────────────────────────
@@ -149,22 +230,24 @@ Return ONLY valid JSON, no markdown, no explanation.
 
 
 def update_contract_prices():
-    """Scheduled: scrape all providers → Supabase."""
+    """Scheduled: scrape all providers per zone → Supabase."""
     logger.info("Updating contract prices...")
-    for provider, url in PROVIDER_URLS.items():
-        data = scrape_provider(provider, url)
-        if data:
-            try:
-                supabase.table("contracts").upsert({
-                    **data,
-                    "direct_url":    PROVIDER_DIRECT_URLS.get(provider),
-                    "affiliate_url": None,
-                    "updated_at":    datetime.now(timezone.utc).isoformat(),
-                }).execute()
-                logger.info(f"  ✓ {provider}")
-            except Exception as e:
-                logger.error(f"  ✗ {provider}: {e}")
-    redis_client.delete("elecz:contracts:FI")
+    for zone, providers in PROVIDER_URLS.items():
+        for provider, url in providers.items():
+            data = scrape_provider(provider, url)
+            if data:
+                try:
+                    data["zone"] = zone
+                    supabase.table("contracts").upsert({
+                        **data,
+                        "direct_url":    PROVIDER_DIRECT_URLS.get(zone, {}).get(provider),
+                        "affiliate_url": None,
+                        "updated_at":    datetime.now(timezone.utc).isoformat(),
+                    }).execute()
+                    logger.info(f"  ✓ {zone}/{provider}")
+                except Exception as e:
+                    logger.error(f"  ✗ {zone}/{provider}: {e}")
+        redis_client.delete(f"elecz:contracts:{zone}")
     logger.info("Contract update complete.")
 
 
