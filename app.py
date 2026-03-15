@@ -197,6 +197,45 @@ def get_spot_price(zone: str = "FI") -> Optional[float]:
     return price
 
 
+# ─── Frankfurter currency ──────────────────────────────────────────────────
+
+ZONE_CURRENCY = {
+    "FI": "EUR",
+    "SE": "SEK", "SE1": "SEK", "SE2": "SEK", "SE3": "SEK", "SE4": "SEK",
+    "NO": "NOK", "NO1": "NOK", "NO2": "NOK", "NO3": "NOK", "NO4": "NOK", "NO5": "NOK",
+    "DK": "DKK", "DK1": "DKK", "DK2": "DKK",
+}
+
+def get_exchange_rate(currency: str) -> Optional[float]:
+    """Get EUR to local currency rate. Cached 24h."""
+    if currency == "EUR":
+        return 1.0
+    key    = f"elecz:fx:{currency}"
+    cached = redis_client.get(key)
+    if cached:
+        return float(cached)
+    try:
+        resp = httpx.get(
+            "https://api.frankfurter.app/latest",
+            params={"from": "EUR", "to": currency},
+            timeout=5
+        )
+        resp.raise_for_status()
+        rate = resp.json()["rates"][currency]
+        redis_client.setex(key, 86400, str(rate))
+        return rate
+    except Exception as e:
+        logger.error(f"Frankfurter failed {currency}: {e}")
+        return None
+
+def convert_price(price_eur: Optional[float], currency: str) -> Optional[float]:
+    """Convert EUR c/kWh to local currency c/kWh."""
+    if price_eur is None or currency == "EUR":
+        return price_eur
+    rate = get_exchange_rate(currency)
+    return round(price_eur * rate, 4) if rate else price_eur
+
+
 # ─── Gemini scraper ────────────────────────────────────────────────────────
 
 def scrape_provider(provider: str, url: str) -> Optional[dict]:
@@ -309,6 +348,8 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
     """Build the full Elecz MCP payload."""
     spot      = get_spot_price(zone)
     contracts = get_contracts(zone)
+    currency  = ZONE_CURRENCY.get(zone, "EUR")
+    spot_local = convert_price(spot, currency)
 
     # Rank by estimated annual cost, then trust score
     ranked = []
@@ -337,10 +378,12 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
         "signal":    "elecz",
         "version":   "1.0",
         "zone":      zone,
+        "currency":  currency,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "spot_price": {
-            "now":  spot,
-            "unit": "c/kWh",
+            "eur":      spot,
+            "local":    spot_local,
+            "unit":     f"{currency}/kWh (cents)",
         },
         "best_contract": {
             "provider":             best.get("provider")             if best else None,
