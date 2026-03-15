@@ -212,4 +212,4 @@ def best_energy_contract(params: SignalInput) -> str:
 if __name__ == "__main__":
     port = int(os.environ.get("MCP_PORT", 8001))
     os.environ.setdefault("PORT", str(port))
-    mcp.run(transport="streamable-http")
+    mcp.run(transport="sse")
