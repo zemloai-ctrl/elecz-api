@@ -770,28 +770,85 @@ scheduler.add_job(update_contract_prices, "cron", hour=2)
 scheduler.start()
 
 
-# ─── MCP Server (thread) ───────────────────────────────────────────────────
+# ─── FastMCP — MCP tools ───────────────────────────────────────────────────
+# MCP tools defined here, mounted at /mcp path via DispatcherMiddleware
 
-def start_mcp_server():
-    """Start FastMCP server in background thread."""
-    try:
-        import threading
-        import subprocess
-        import sys
-        mcp_port = int(os.environ.get("MCP_PORT", 8001))
-        logger.info(f"Starting MCP server on port {mcp_port}...")
-        subprocess.Popen([
-            sys.executable, "mcp_server.py"
-        ], env={**os.environ, "MCP_PORT": str(mcp_port)})
-    except Exception as e:
-        logger.error(f"MCP server start failed: {e}")
+from mcp.server.fastmcp import FastMCP
+from pydantic import BaseModel as PydanticBaseModel, Field as PydanticField, ConfigDict as PydanticConfigDict
 
-# Start MCP server when app starts
-import threading
-mcp_thread = threading.Thread(target=start_mcp_server, daemon=True)
-mcp_thread.start()
+elecz_mcp = FastMCP("elecz_mcp")
 
+class _ZoneInput(PydanticBaseModel):
+    model_config = PydanticConfigDict(str_strip_whitespace=True, extra="forbid")
+    zone: str = PydanticField(default="FI", description="Nordic zone: FI, SE, NO, DK or sub-zones SE1-SE4, NO1-NO5, DK1-DK2")
+
+class _SignalInput(PydanticBaseModel):
+    model_config = PydanticConfigDict(str_strip_whitespace=True, extra="forbid")
+    zone: str = PydanticField(default="FI", description="Nordic zone: FI, SE, NO, DK")
+    consumption: int = PydanticField(default=2000, ge=100, le=100000, description="Annual kWh")
+    heating: str = PydanticField(default="district", description="district or electric")
+
+class _CheapestInput(PydanticBaseModel):
+    model_config = PydanticConfigDict(str_strip_whitespace=True, extra="forbid")
+    zone: str = PydanticField(default="FI", description="Nordic zone")
+    hours: int = PydanticField(default=5, ge=1, le=24, description="Number of cheapest hours")
+    window: int = PydanticField(default=24, ge=1, le=48, description="Hours to look ahead")
+
+@elecz_mcp.tool(name="energy_decision_signal")
+def _mcp_signal(params: _SignalInput) -> str:
+    """Get full energy decision signal: spot price, best contract, recommendation.
+    Use when user asks about electricity price, best contract, or should switch."""
+    return json.dumps(build_signal(params.zone.upper(), params.consumption, "00100", params.heating), ensure_ascii=False)
+
+@elecz_mcp.tool(name="spot_price")
+def _mcp_spot(params: _ZoneInput) -> str:
+    """Get current electricity spot price for a Nordic zone.
+    Use when user asks: mikä on sähkön hinta nyt, what is electricity price now."""
+    price = get_spot_price(params.zone.upper())
+    currency = ZONE_CURRENCY.get(params.zone.upper(), "EUR")
+    return json.dumps({
+        "zone": params.zone.upper(),
+        "price_eur": price,
+        "price_local": convert_price(price, currency),
+        "currency": currency,
+        "unit": "c/kWh",
+        "powered_by": "Elecz.com"
+    }, ensure_ascii=False)
+
+@elecz_mcp.tool(name="cheapest_hours")
+def _mcp_cheapest(params: _CheapestInput) -> str:
+    """Get cheapest electricity hours next 24h. Use for EV charging, home automation, heat pumps.
+    Use when user asks: milloin sähkö on halvinta, when to charge EV."""
+    return json.dumps(get_cheapest_hours(params.zone.upper(), params.hours, params.window), ensure_ascii=False)
+
+@elecz_mcp.tool(name="best_energy_contract")
+def _mcp_contract(params: _SignalInput) -> str:
+    """Get best electricity contract recommendation.
+    Use when user asks: mikä on halvin sähkösopimus, which contract should I choose."""
+    data = build_signal(params.zone.upper(), params.consumption, "00100", params.heating)
+    return json.dumps({
+        "zone": data.get("zone"),
+        "best_contract": data.get("best_contract"),
+        "decision_hint": data.get("decision_hint"),
+        "reason": data.get("reason"),
+        "action": data.get("action"),
+        "powered_by": "Elecz.com"
+    }, ensure_ascii=False)
+
+
+# ─── Mount Flask + FastMCP on same port ───────────────────────────────────
+# /mcp → FastMCP SSE server
+# everything else → Flask
+
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+from werkzeug.serving import run_simple
+
+mcp_asgi_app = elecz_mcp.sse_app()
+
+combined_app = DispatcherMiddleware(app, {
+    "/mcp": mcp_asgi_app,
+})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    run_simple("0.0.0.0", port, combined_app, use_reloader=False)
