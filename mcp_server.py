@@ -88,16 +88,7 @@ def _call_elecz(path: str, params: dict) -> dict:
 
 # ─── MCP Tools ─────────────────────────────────────────────────────────────
 
-@mcp.tool(
-    name="energy_decision_signal",
-    annotations={
-        "title": "Energy Decision Signal",
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
+@mcp.tool(name="energy_decision_signal")
 def energy_decision_signal(params: SignalInput) -> str:
     """
     Get full energy decision signal for a Nordic zone.
@@ -125,16 +116,7 @@ def energy_decision_signal(params: SignalInput) -> str:
     return json.dumps(data, indent=2, ensure_ascii=False)
 
 
-@mcp.tool(
-    name="spot_price",
-    annotations={
-        "title": "Current Spot Price",
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
+@mcp.tool(name="spot_price")
 def spot_price(params: ZoneInput) -> str:
     """
     Get current electricity spot price for a Nordic zone.
@@ -158,16 +140,7 @@ def spot_price(params: ZoneInput) -> str:
     return json.dumps(data, indent=2, ensure_ascii=False)
 
 
-@mcp.tool(
-    name="cheapest_hours",
-    annotations={
-        "title": "Cheapest Electricity Hours",
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
+@mcp.tool(name="cheapest_hours")
 def cheapest_hours(params: CheapestHoursInput) -> str:
     """
     Get cheapest electricity hours in the next 24 hours.
@@ -197,16 +170,7 @@ def cheapest_hours(params: CheapestHoursInput) -> str:
     return json.dumps(data, indent=2, ensure_ascii=False)
 
 
-@mcp.tool(
-    name="best_energy_contract",
-    annotations={
-        "title": "Best Energy Contract",
-        "readOnlyHint": True,
-        "destructiveHint": False,
-        "idempotentHint": True,
-        "openWorldHint": True,
-    }
-)
+@mcp.tool(name="best_energy_contract")
 def best_energy_contract(params: SignalInput) -> str:
     """
     Get best electricity contract for a given consumption profile.
