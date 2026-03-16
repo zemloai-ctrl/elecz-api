@@ -840,15 +840,30 @@ def _mcp_contract(params: _SignalInput) -> str:
 # /mcp → FastMCP SSE server
 # everything else → Flask
 
-from werkzeug.middleware.dispatcher import DispatcherMiddleware
-from werkzeug.serving import run_simple
+# /mcp → FastMCP SSE server
+# everything else → Flask (wrapped as ASGI)
 
+from a2wsgi import WSGIMiddleware
+
+# Wrap Flask (WSGI) as ASGI
+flask_asgi = WSGIMiddleware(app)
+
+# FastMCP SSE app (already ASGI)
 mcp_asgi_app = elecz_mcp.sse_app()
 
-combined_app = DispatcherMiddleware(app, {
-    "/mcp": mcp_asgi_app,
-})
+async def combined_app(scope, receive, send):
+    """Route /mcp/* to FastMCP, everything else to Flask."""
+    path = scope.get("path", "")
+    if path.startswith("/mcp"):
+        # Strip /mcp prefix for FastMCP
+        scope = dict(scope)
+        scope["path"] = path[4:] or "/"
+        scope["raw_path"] = scope["path"].encode()
+        await mcp_asgi_app(scope, receive, send)
+    else:
+        await flask_asgi(scope, receive, send)
 
 if __name__ == "__main__":
+    import uvicorn
     port = int(os.environ.get("PORT", 5000))
-    run_simple("0.0.0.0", port, combined_app, use_reloader=False)
+    uvicorn.run(combined_app, host="0.0.0.0", port=port)
