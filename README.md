@@ -10,10 +10,9 @@ Designed for OpenClaw, LangChain, Claude Desktop, Copilot Extensions, Home Assis
 
 # 🚀 Why Elecz?
 
-Modern agents tekevät päätöksiä ajasta, energiasta ja kustannuksista.  
-Sähkömarkkinat ovat monimutkaisia — mutta signaalin ei tarvitse olla.
-
-Elecz tarjoaa:
+Modern agents optimize for time, energy, and cost.
+The energy market is complex — but the signal shouldn't be.
+Elecz delivers:
 
 - Real‑time spot price  
 - Cheapest hours (next 24h)  
