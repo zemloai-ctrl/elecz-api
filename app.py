@@ -195,21 +195,41 @@ def fetch_day_ahead(zone: str, date: datetime) -> list[dict]:
 
 
 def get_spot_price(zone: str = "FI") -> Optional[float]:
-    """Current spot price c/kWh from Redis or ENTSO-E."""
+    """Current spot price c/kWh. Priority: Redis cache → ENTSO-E live → Supabase fallback."""
     key    = f"elecz:spot:{zone}"
     cached = redis_client.get(key)
     if cached:
         return float(cached)
-    now   = datetime.now(timezone.utc)
-    rows  = fetch_day_ahead(zone, now)
-    if not rows:
-        return None
+
+    # Try ENTSO-E live
+    now          = datetime.now(timezone.utc)
+    rows         = fetch_day_ahead(zone, now)
     current_hour = now.replace(minute=0, second=0, microsecond=0)
-    for r in rows:
-        if r["hour"].replace(tzinfo=timezone.utc) == current_hour:
-            price = round(r["price_eur_mwh"] / 10, 4)
-            redis_client.setex(key, REDIS_TTL_SPOT, str(price))
+    if rows:
+        for r in rows:
+            if r["hour"].replace(tzinfo=timezone.utc) == current_hour:
+                price = round(r["price_eur_mwh"] / 10, 4)
+                redis_client.setex(key, REDIS_TTL_SPOT, str(price))
+                return price
+
+    # Fallback: most recent known price from Supabase
+    logger.warning(f"ENTSO-E unavailable for {zone} — falling back to Supabase")
+    try:
+        result = supabase.table("prices_day_ahead").select(
+            "hour, price_ckwh"
+        ).eq("zone", zone).lte(
+            "hour", now.isoformat()
+        ).order("hour", desc=True).limit(1).execute()
+        rows_db = result.data or []
+        if rows_db:
+            price = rows_db[0]["price_ckwh"]
+            # Cache briefly — stale data, refresh in 10 min
+            redis_client.setex(key, 600, str(price))
+            logger.info(f"Supabase fallback {zone}: {price} c/kWh (from {rows_db[0]['hour']})")
             return price
+    except Exception as e:
+        logger.error(f"Supabase fallback failed {zone}: {e}")
+
     return None
 
 
