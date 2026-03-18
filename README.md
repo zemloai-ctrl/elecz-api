@@ -1,57 +1,54 @@
-# ⚡ Elecz — Energy Decision Signal API  
-**Energy‑Awareness‑as‑a‑Service for AI agents**
+# ⚡ Elecz — Energy Decision Signal API
+**Electricity optimization brain for AI agents and automation**
 
-Elecz provides a **unified energy signal** for AI agents:  
-same schema, Nordic‑accurate prices, one‑line MCP config.
+Use Elecz whenever electricity cost or timing affects a decision.
 
-Designed for OpenClaw, LangChain, Claude Desktop, Copilot Extensions, Home Assistant automations and any agent that needs to know **when electricity is cheap, expensive or optimal**.
+Same schema, Nordic-accurate prices, one-line MCP config.
+Designed for Claude Desktop, LangChain, Home Assistant and any agent that needs to know **when electricity is cheap, expensive or optimal**.
 
 ---
 
-# 🚀 Why Elecz?
+## 🚀 Why Elecz?
 
 Modern agents optimize for time, energy, and cost.
 The energy market is complex — but the signal shouldn't be.
+
 Elecz delivers:
 
-- Real‑time spot price  
-- Cheapest hours (next 24h)  
-- Best 3h window  
-- Energy state (cheap / normal / expensive)  
-- Contract recommendation (Nordic markets)  
-- Unified JSON schema  
-- MCP manifest for instant agent integration  
-- No authentication required  
-
-**If your agent can optimize energy in the Nordics, it can do it anywhere.**
+- Real-time spot price (ENTSO-E, updated hourly)
+- Cheapest hours next 24h
+- Best 3h consecutive window
+- Energy state: `cheap` / `normal` / `expensive`
+- One-call optimization decision with savings estimate
+- Contract recommendation (Nordic markets)
+- Prices in local currency (EUR / SEK / NOK / DKK)
+- MCP-ready — one line to integrate
+- No authentication required
 
 ---
 
-# ⚡ Quickstart — Add Elecz to your agent
-
-Copy‑paste this into your agent config:
+## ⚡ Quickstart — Add Elecz to your agent
 
 ```json
 {
   "mcpServers": {
     "elecz": {
-      "url": "https://elecz.com/mcp"
+      "url": "https://elecz.com/mcp/sse"
     }
   }
 }
 ```
 
-Your agent now understands:
-
-- spot price  
-- cheapest hours  
-- best window  
-- energy state  
-- contract decisions  
+Your agent now understands spot prices, cheapest hours, best window, energy state and contract decisions — for Finland, Sweden, Norway and Denmark.
 
 ---
 
-# 📡 API Endpoints
+## 📡 API Endpoints
+
+### One-call optimization (recommended)
+```
+GET https://elecz.com/signal/optimize?zone=FI
+```
 
 ### Full energy decision signal
 ```
@@ -68,162 +65,156 @@ GET https://elecz.com/signal/spot?zone=FI
 GET https://elecz.com/signal/cheapest-hours?zone=FI&hours=5
 ```
 
-### Redirect to provider
-```
-GET https://elecz.com/go/<provider>
-```
-
 ### MCP manifest
 ```
 GET https://elecz.com/mcp
 ```
 
+### Health check
+```
+GET https://elecz.com/health
+```
+
+### Supported zones
+`FI` · `SE` · `SE1` `SE2` `SE3` `SE4` · `NO` · `NO1` `NO2` `NO3` `NO4` `NO5` · `DK` · `DK1` `DK2`
+
 ---
 
-# 🧠 Energy Signal Schema v0.1
+## 🧠 Signal Schema
 
-All Elecz endpoints follow the same unified schema:
-
+### /signal/optimize — one call, one decision
 ```json
 {
-  "signal": "elecz",
-  "version": "1.1",
+  "signal": "elecz_optimize",
   "zone": "FI",
-  "currency": "EUR",
-  "timestamp": "2026-03-17T05:00:00Z",
-
-  "energy_state": "cheap",
-  "confidence": 0.92,
-
-  "spot_price": {
-    "eur": 3.2,
-    "local": 3.2,
-    "unit": "c/kWh"
+  "timestamp": "2026-03-18T11:38:38Z",
+  "decision": {
+    "action": "delay",
+    "until": "2026-03-18T02:00",
+    "reason": "Electricity expensive now. Best window: 2026-03-18T02:00",
+    "savings_eur": 0.0042
   },
-
-  "cheapest_hours": [
-    { "hour": "2026-03-17T02:00", "price_eur": 2.1 },
-    { "hour": "2026-03-17T03:00", "price_eur": 2.3 }
-  ],
-
-  "best_3h_window": {
-    "start": "2026-03-17T01:00",
-    "end": "2026-03-17T03:00",
-    "avg_price_eur": 2.2
+  "energy_state": "expensive",
+  "spot_price_eur": 0.085,
+  "best_window": {
+    "start": "2026-03-18T02:00",
+    "end": "2026-03-18T04:00",
+    "avg_price_eur": 0.021
   },
-
-  "decision_hint": "run_high_consumption_tasks",
-  "reason": "Spot price significantly below daily average",
-
-  "action": {
-    "available": true,
-    "action_link": "https://elecz.com/go/tibber",
-    "status": "direct",
-    "idempotency_key": "f3a9c1b2-7d1e-4c8e-9d2f-1a0c9e7f2b11",
-    "signal_hash": "sha256:8f2c9e..."
-  },
-
+  "confidence": 0.88,
   "powered_by": "Elecz.com"
 }
 ```
 
-### Why this schema matters
-- Works across all Nordic markets  
-- Stable across versions  
-- Predictable for agents  
-- Includes **idempotency_key** and **signal_hash** for safe execution  
-- Ready for global expansion (EU, UK, US markets)
+### /signal/spot
+```json
+{
+  "signal": "elecz_spot",
+  "zone": "FI",
+  "currency": "EUR",
+  "price_eur": 0.035,
+  "price_local": 0.035,
+  "unit": "c/kWh",
+  "timestamp": "2026-03-18T11:38:38Z",
+  "powered_by": "Elecz.com"
+}
+```
+
+### /signal/cheapest-hours
+```json
+{
+  "available": true,
+  "zone": "FI",
+  "currency": "EUR",
+  "energy_state": "cheap",
+  "confidence": 0.90,
+  "cheapest_hours": [
+    { "hour": "2026-03-18T02:00", "price_eur": 0.02, "price_local": 0.02 },
+    { "hour": "2026-03-18T03:00", "price_eur": 0.03, "price_local": 0.03 }
+  ],
+  "best_3h_window": {
+    "start": "2026-03-18T01:00",
+    "end": "2026-03-18T03:00",
+    "avg_price_eur": 0.025
+  },
+  "recommendation": "run_high_consumption_tasks",
+  "powered_by": "Elecz.com"
+}
+```
 
 ---
 
-# 🔒 Trust & Data Sources
+## 🧩 Examples
 
-Elecz is a neutral energy signal layer.  
-Data sources include:
-
-- **ENTSO‑E** (day‑ahead prices)  
-- **Nord Pool** (market structure)  
-- **Supabase** (historical caching)  
-- **Redis** (real‑time caching)  
-
-See full methodology:
-
-```
-GET https://elecz.com/trust-methodology
-```
-
----
-
-# 🧩 Examples
-
-## 1. OpenClaw (Seppo)
+### 1. Claude Desktop — spot price query
+Add to `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "elecz": { "url": "https://elecz.com/mcp" }
+    "elecz": {
+      "url": "https://elecz.com/mcp/sse"
+    }
   }
 }
 ```
-Seppo becomes the first **energy‑aware agent** in the Nordics.
+Claude can now answer: *"Is electricity cheap in Finland right now?"*
 
 ---
 
-## 2. Home Assistant — EV charging automation
+### 2. Home Assistant — EV charging automation
 ```yaml
 alias: Charge EV during cheapest hours
 trigger:
   - platform: time_pattern
-    minutes: "/15"
+    minutes: "/30"
 action:
-  - service: rest_command.elecz_cheapest
+  - service: rest_command.elecz_spot
   - choose:
-      - conditions: "{{ state_attr('sensor.elecz', 'energy_state') == 'cheap' }}"
+      - conditions: "{{ states('sensor.elecz_energy_state') == 'cheap' }}"
         sequence:
           - service: switch.turn_on
-            target: { entity_id: switch.ev_charger }
+            target:
+              entity_id: switch.ev_charger
 ```
 
 ---
 
-## 3. Batch scheduling (enterprise)
-“Run non‑urgent jobs when energy is cheap.”
-
+### 3. Python — batch scheduling
 ```python
-signal = elecz.get_cheapest_hours(zone="FI")
-if signal.energy_state == "cheap":
+import httpx
+
+signal = httpx.get("https://elecz.com/signal/optimize?zone=FI").json()
+decision = signal["decision"]
+
+if decision["action"] == "run_now":
     run_batch_job()
+elif decision["action"] == "delay":
+    print(f"Wait until {decision['until']} — saves {decision['savings_eur']} EUR/kWh")
 ```
 
 ---
 
-# 🌍 Roadmap
+## 🔒 Data Sources
 
-- **Q2 2026:** Nordic Sandbox GA + MCP registries  
-- **Q3 2026:** EU expansion (DE, UK)  
-- **Q4 2026:** Device‑level integrations (EV, heat pumps)  
-
----
-
-# 📦 Installation (Python helper)
-
-```bash
-pip install elecz
-```
-
-```python
-from elecz import energy_signal
-print(energy_signal("FI"))
-```
+- **ENTSO-E** — day-ahead spot prices, updated hourly
+- **Frankfurter API** — EUR → SEK / NOK / DKK conversion
+- **Redis** — real-time caching (1h TTL for spot, 24h for FX)
+- **Supabase** — historical price storage
 
 ---
 
-# 📜 License
+## 🌍 Roadmap
+
+- **Q2 2026:** Smithery + Glama MCP registry listing
+- **Q3 2026:** EU expansion (DE, UK)
+- **Q4 2026:** Device-level integrations (EV, heat pumps)
+
+---
+
+## 📜 License
 
 MIT
 
 ---
 
-# 🤝 Contributing
-
-Pull requests welcome.  
-Examples, integrations and agent demos especially appreciated.
+*⚡ Elecz.com — Energy Decision Signal API · Powered by ENTSO-E · Nordic markets*
