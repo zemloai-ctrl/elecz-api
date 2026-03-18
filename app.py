@@ -957,19 +957,36 @@ def _mcp_optimize(params: _SignalInput) -> str:
 
 
 # ─── Mount Flask + FastMCP on same port ───────────────────────────────────
+# /mcp      → Streamable HTTP (POST) — Smithery, Claude Desktop, modern clients
+# /mcp/sse  → SSE transport (GET)    — legacy clients
+# everything else → Flask
 
 from a2wsgi import WSGIMiddleware
 
 flask_asgi   = WSGIMiddleware(app)
-mcp_asgi_app = elecz_mcp.sse_app()
+mcp_sse_app  = elecz_mcp.sse_app()
+
+try:
+    mcp_http_app = elecz_mcp.streamable_http_app()
+except AttributeError:
+    # FastMCP version doesn't support streamable_http_app, fall back to SSE
+    mcp_http_app = mcp_sse_app
+    logger.warning("streamable_http_app not available, using SSE for /mcp")
 
 async def combined_app(scope, receive, send):
     path = scope.get("path", "")
-    if path.startswith("/mcp"):
-        scope            = dict(scope)
-        scope["path"]    = path[4:] or "/"
+    if path.startswith("/mcp/sse"):
+        # SSE transport — strip /mcp prefix
+        scope = dict(scope)
+        scope["path"]     = path[4:] or "/"
         scope["raw_path"] = scope["path"].encode()
-        await mcp_asgi_app(scope, receive, send)
+        await mcp_sse_app(scope, receive, send)
+    elif path == "/mcp" or path == "/mcp/":
+        # Streamable HTTP transport for Smithery and modern MCP clients
+        scope = dict(scope)
+        scope["path"]     = "/"
+        scope["raw_path"] = b"/"
+        await mcp_http_app(scope, receive, send)
     else:
         await flask_asgi(scope, receive, send)
 
