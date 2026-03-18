@@ -1018,9 +1018,7 @@ async def combined_app(scope, receive, send):
         await mcp_sse_app(scope, receive, send)
     elif path == "/mcp" or path == "/mcp/":
         # Streamable HTTP transport for Smithery and modern MCP clients
-        scope = dict(scope)
-        scope["path"]     = "/"
-        scope["raw_path"] = b"/"
+        # Keep path as /mcp — FastMCP 1.9.4 handles it natively
         await mcp_http_app(scope, receive, send)
     else:
         await flask_asgi(scope, receive, send)
