@@ -897,7 +897,7 @@ routes = [
     Mount("/mcp",                               app=mcp_app),
 ]
 
-app = Starlette(routes=routes, lifespan=lifespan)
+app = Starlette(routes=routes, lifespan=lifespan, redirect_slashes=False)
 
 if __name__ == "__main__":
     import uvicorn
