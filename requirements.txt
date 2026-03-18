@@ -5,5 +5,5 @@ redis==5.0.4
 apscheduler==3.10.4
 google-generativeai==0.7.2
 gunicorn==22.0.0
-mcp[cli]==1.6.0
+mcp[cli]==1.9.4
 a2wsgi==1.10.7
