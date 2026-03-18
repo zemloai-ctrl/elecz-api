@@ -204,7 +204,6 @@ def get_spot_price(zone: str = "FI") -> Optional[float]:
     rows  = fetch_day_ahead(zone, now)
     if not rows:
         return None
-    # Find current hour
     current_hour = now.replace(minute=0, second=0, microsecond=0)
     for r in rows:
         if r["hour"].replace(tzinfo=timezone.utc) == current_hour:
@@ -263,12 +262,9 @@ def convert_price(price_eur: Optional[float], currency: str) -> Optional[float]:
 # ─── Cheapest hours logic ──────────────────────────────────────────────────
 
 def get_cheapest_hours(zone: str, n_hours: int = 5, window_h: int = 24) -> dict:
-    """
-    Return cheapest hours in next window_h hours.
-    Data from Supabase prices_day_ahead table.
-    """
-    now     = datetime.now(timezone.utc)
-    cutoff  = now + timedelta(hours=window_h)
+    """Return cheapest hours in next window_h hours."""
+    now      = datetime.now(timezone.utc)
+    cutoff   = now + timedelta(hours=window_h)
     currency = ZONE_CURRENCY.get(zone, "EUR")
 
     try:
@@ -277,7 +273,6 @@ def get_cheapest_hours(zone: str, n_hours: int = 5, window_h: int = 24) -> dict:
         ).eq("zone", zone).gte("hour", now.isoformat()).lte(
             "hour", cutoff.isoformat()
         ).order("price_ckwh").execute()
-
         rows = result.data or []
     except Exception as e:
         logger.error(f"Cheapest hours DB failed: {e}")
@@ -286,15 +281,13 @@ def get_cheapest_hours(zone: str, n_hours: int = 5, window_h: int = 24) -> dict:
     if not rows:
         return {"available": False, "reason": "No price data yet. ENTSO-E token pending."}
 
-    cheapest = rows[:n_hours]
+    cheapest   = rows[:n_hours]
     all_prices = [r["price_ckwh"] for r in rows]
-    avg = sum(all_prices) / len(all_prices) if all_prices else 0
+    avg        = sum(all_prices) / len(all_prices) if all_prices else 0
 
-    # Best consecutive window (3h default)
-    best_window = _best_consecutive_window(rows, 3)
-
-    # Energy state
+    best_window   = _best_consecutive_window(rows, 3)
     current_price = get_spot_price(zone) or avg
+
     if current_price < avg * 0.7:
         energy_state = "cheap"
         confidence   = 0.90
@@ -313,8 +306,8 @@ def get_cheapest_hours(zone: str, n_hours: int = 5, window_h: int = 24) -> dict:
         "confidence":    confidence,
         "cheapest_hours": [
             {
-                "hour":      r["hour"][:16],
-                "price_eur": r["price_ckwh"],
+                "hour":        r["hour"][:16],
+                "price_eur":   r["price_ckwh"],
                 "price_local": convert_price(r["price_ckwh"], currency),
             }
             for r in cheapest
@@ -327,10 +320,9 @@ def get_cheapest_hours(zone: str, n_hours: int = 5, window_h: int = 24) -> dict:
 
 
 def _best_consecutive_window(rows: list, window: int) -> Optional[dict]:
-    """Find best consecutive N-hour window by average price."""
     if len(rows) < window:
         return None
-    best_avg  = float("inf")
+    best_avg   = float("inf")
     best_start = None
     for i in range(len(rows) - window + 1):
         avg = sum(r["price_ckwh"] for r in rows[i:i+window]) / window
@@ -342,7 +334,6 @@ def _best_consecutive_window(rows: list, window: int) -> Optional[dict]:
 
 
 def _expensive_hours(rows: list, avg: float) -> list[str]:
-    """Hours more than 30% above average."""
     return [r["hour"][:16] for r in rows if r["price_ckwh"] > avg * 1.3][:6]
 
 
@@ -357,7 +348,6 @@ def _consumption_recommendation(state: str) -> str:
 # ─── Contract scraping ─────────────────────────────────────────────────────
 
 def scrape_provider(provider: str, url: str, zone: str) -> Optional[dict]:
-    """Gemini scrapes contract pricing from provider website."""
     prompt = f"""
 Visit this electricity provider page: {url}
 Country/zone: {zone}
@@ -388,7 +378,6 @@ Return ONLY the JSON object. No markdown, no explanation.
 
 
 def update_contract_prices():
-    """Scheduled 02:00 — scrape all providers."""
     logger.info("Updating contract prices...")
     for zone, providers in PROVIDER_URLS.items():
         for provider, url in providers.items():
@@ -409,15 +398,13 @@ def update_contract_prices():
 
 
 def update_spot_prices():
-    """Scheduled hourly — refresh spot + save day-ahead."""
     for zone in ["FI", "SE", "NO", "DK"]:
         redis_client.delete(f"elecz:spot:{zone}")
         now  = datetime.now(timezone.utc)
         rows = fetch_day_ahead(zone, now)
         if rows:
             save_day_ahead_to_supabase(zone, rows)
-            # Also save tomorrow if available (published ~13:15)
-            tomorrow = now + timedelta(days=1)
+            tomorrow      = now + timedelta(days=1)
             rows_tomorrow = fetch_day_ahead(zone, tomorrow)
             if rows_tomorrow:
                 save_day_ahead_to_supabase(zone, rows_tomorrow)
@@ -465,14 +452,14 @@ def decision_hint(spot: float, contract: dict, consumption: int, heating: str) -
 
 
 def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> dict:
-    spot      = get_spot_price(zone)
-    contracts = get_contracts(zone)
-    currency  = ZONE_CURRENCY.get(zone, "EUR")
+    spot       = get_spot_price(zone)
+    contracts  = get_contracts(zone)
+    currency   = ZONE_CURRENCY.get(zone, "EUR")
     spot_local = convert_price(spot, currency)
 
     ranked = []
     for c in contracts:
-        ts    = trust_score(c)
+        ts     = trust_score(c)
         margin = c.get("spot_margin_ckwh") or 0
         fee    = c.get("basic_fee_eur_month") or 0
         fixed  = c.get("fixed_price_ckwh")
@@ -489,11 +476,8 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
 
     hint       = decision_hint(spot or 0, best or {}, consumption, heating) if best else {}
     action_url = f"https://elecz.com/go/{best['provider']}" if best else None
-
-    # Confidence based on data freshness
     confidence = 0.95 if spot else 0.0
 
-    # Energy state
     if spot:
         if spot < 3.0:   energy_state = "cheap"
         elif spot > 8.0: energy_state = "expensive"
@@ -501,9 +485,14 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
     else:
         energy_state = "unknown"
 
+    best_annual  = best.get("annual_cost_estimate") if best else None
+    worst_annual = ranked[-1].get("annual_cost_estimate") if ranked else None
+    savings_eur_year = round(worst_annual - best_annual, 2) if best_annual and worst_annual and worst_annual > best_annual else None
+    should_switch    = savings_eur_year and savings_eur_year > 50
+
     return {
         "signal":       "elecz",
-        "version":      "1.1",
+        "version":      "1.2",
         "zone":         zone,
         "currency":     currency,
         "timestamp":    datetime.now(timezone.utc).isoformat(),
@@ -512,22 +501,25 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
         "spot_price": {
             "eur":   spot,
             "local": spot_local,
-            "unit":  f"c/kWh",
+            "unit":  "c/kWh",
         },
         "best_contract": {
             "provider":             best.get("provider")             if best else None,
             "type":                 best.get("contract_type")        if best else None,
             "spot_margin_ckwh":     best.get("spot_margin_ckwh")     if best else None,
             "basic_fee_eur_month":  best.get("basic_fee_eur_month")  if best else None,
-            "annual_cost_estimate": best.get("annual_cost_estimate") if best else None,
+            "annual_cost_estimate": best_annual,
             "trust_score":          best.get("trust_score")          if best else None,
         } if best else None,
         "decision_hint": hint.get("hint"),
         "reason":        hint.get("reason"),
         "action": {
-            "available":   bool(action_url),
-            "action_link": action_url,
-            "status":      "direct",
+            "type":                      "switch_contract" if should_switch else "monitor",
+            "available":                 bool(action_url),
+            "action_link":               action_url,
+            "expected_savings_eur_year": savings_eur_year,
+            "confidence":                confidence,
+            "status":                    "switch_now" if should_switch else "direct",
         },
         "powered_by": "Elecz.com",
     }
@@ -538,10 +530,27 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
 @app.route("/")
 def index():
     """Landing page — developer docs + live spot price."""
-    spot_fi = get_spot_price("FI")
-    spot_se = get_spot_price("SE")
-    spot_no = get_spot_price("NO")
-    spot_dk = get_spot_price("DK")
+
+    zones_display = [
+        ("🇫🇮 Finland (FI)", get_spot_price("FI"), "EUR"),
+        ("🇸🇪 Sweden (SE)",  get_spot_price("SE"), "SEK"),
+        ("🇳🇴 Norway (NO)",  get_spot_price("NO"), "NOK"),
+        ("🇩🇰 Denmark (DK)", get_spot_price("DK"), "DKK"),
+    ]
+
+    def price_cell(price_eur, currency):
+        if price_eur is None:
+            return '<span class="null">pending token</span>'
+        local = convert_price(price_eur, currency)
+        val   = local if local is not None else price_eur
+        return f"{val:.4f} {currency}"
+
+    rows_html = "".join(
+        f'<tr><td>{label}</td>'
+        f'<td class="price">{price_cell(price, currency)}</td>'
+        f'<td>{"✅" if price else "⏳"}</td></tr>\n'
+        for label, price, currency in zones_display
+    )
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -570,11 +579,8 @@ def index():
 
   <h2>Nordic Spot Prices — Now</h2>
   <table>
-    <tr><th>Zone</th><th>Price (c/kWh EUR)</th><th>Status</th></tr>
-    <tr><td>🇫🇮 Finland (FI)</td><td class="price">{f'{spot_fi:.4f}' if spot_fi else '<span class="null">pending token</span>'}</td><td>{'✅' if spot_fi else '⏳'}</td></tr>
-    <tr><td>🇸🇪 Sweden (SE)</td><td class="price">{f'{spot_se:.4f}' if spot_se else '<span class="null">pending token</span>'}</td><td>{'✅' if spot_se else '⏳'}</td></tr>
-    <tr><td>🇳🇴 Norway (NO)</td><td class="price">{f'{spot_no:.4f}' if spot_no else '<span class="null">pending token</span>'}</td><td>{'✅' if spot_no else '⏳'}</td></tr>
-    <tr><td>🇩🇰 Denmark (DK)</td><td class="price">{f'{spot_dk:.4f}' if spot_dk else '<span class="null">pending token</span>'}</td><td>{'✅' if spot_dk else '⏳'}</td></tr>
+    <tr><th>Zone</th><th>Price (c/kWh local)</th><th>Status</th></tr>
+    {rows_html}
   </table>
 
   <h2>API Endpoints</h2>
@@ -625,7 +631,6 @@ def index():
 
 @app.route("/signal", methods=["GET"])
 def signal():
-    """Full energy decision signal."""
     zone        = request.args.get("zone", "FI").upper()
     consumption = int(request.args.get("consumption", 2000))
     postcode    = request.args.get("postcode", "00100")
@@ -637,28 +642,74 @@ def signal():
 
 @app.route("/signal/spot", methods=["GET"])
 def signal_spot():
-    """Current spot price only."""
     zone     = request.args.get("zone", "FI").upper()
     price    = get_spot_price(zone)
     currency = ZONE_CURRENCY.get(zone, "EUR")
     return jsonify({
-        "signal":     "elecz_spot",
-        "zone":       zone,
-        "currency":   currency,
-        "price_eur":  price,
+        "signal":      "elecz_spot",
+        "zone":        zone,
+        "currency":    currency,
+        "price_eur":   price,
         "price_local": convert_price(price, currency),
-        "unit":       "c/kWh",
-        "timestamp":  datetime.now(timezone.utc).isoformat(),
-        "powered_by": "Elecz.com",
+        "unit":        "c/kWh",
+        "timestamp":   datetime.now(timezone.utc).isoformat(),
+        "powered_by":  "Elecz.com",
+    })
+
+
+@app.route("/signal/optimize", methods=["GET"])
+def signal_optimize():
+    zone        = request.args.get("zone", "FI").upper()
+    consumption = int(request.args.get("consumption", 2000))
+    heating     = request.args.get("heating", "district")
+
+    if zone not in ZONES:
+        return jsonify({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}), 400
+
+    sig      = build_signal(zone, consumption, "00100", heating)
+    cheapest = get_cheapest_hours(zone, 3, 24)
+
+    spot    = sig.get("spot_price", {}).get("eur")
+    state   = sig.get("energy_state", "unknown")
+    action  = sig.get("action", {})
+    savings = action.get("expected_savings_eur_year")
+
+    if action.get("status") == "switch_now" and savings:
+        primary_action = "switch_contract"
+        reason = f"Save {savings}€/year by switching to {sig.get('best_contract', {}).get('provider')}"
+    elif state == "cheap":
+        primary_action = "run_now"
+        reason = "Electricity is cheap now — ideal time for high-consumption tasks"
+    elif state == "expensive":
+        window = cheapest.get("best_3h_window", {})
+        primary_action = "delay"
+        reason = f"Electricity expensive now. Best window: {window.get('start', 'later tonight')}"
+    else:
+        primary_action = "monitor"
+        reason = "Normal pricing — no urgent action needed"
+
+    return jsonify({
+        "signal":         "elecz_optimize",
+        "zone":           zone,
+        "timestamp":      datetime.now(timezone.utc).isoformat(),
+        "primary_action": primary_action,
+        "reason":         reason,
+        "energy_state":   state,
+        "spot_price_eur": spot,
+        "best_window":    cheapest.get("best_3h_window"),
+        "contract_switch": {
+            "recommended":               action.get("status") == "switch_now",
+            "provider":                  sig.get("best_contract", {}).get("provider") if sig.get("best_contract") else None,
+            "expected_savings_eur_year": savings,
+            "link":                      action.get("action_link"),
+        },
+        "confidence":  sig.get("confidence", 0),
+        "powered_by":  "Elecz.com",
     })
 
 
 @app.route("/signal/cheapest-hours", methods=["GET"])
 def signal_cheapest_hours():
-    """
-    Cheapest hours in next N hours — for home automation and EV charging.
-    ?zone=FI&hours=5&window=24
-    """
     zone   = request.args.get("zone", "FI").upper()
     hours  = int(request.args.get("hours", 5))
     window = int(request.args.get("window", 24))
@@ -669,7 +720,6 @@ def signal_cheapest_hours():
 
 @app.route("/go/<provider>", methods=["GET"])
 def go(provider: str):
-    """Redirect to provider + log click."""
     try:
         result   = supabase.table("contracts").select(
             "provider, affiliate_url, direct_url"
@@ -697,7 +747,6 @@ def health():
 
 @app.route("/mcp", methods=["GET"])
 def mcp_manifest():
-    """MCP tool manifest for Smithery / Glama."""
     return jsonify({
         "name":        "elecz_mcp",
         "description": "Real-time energy decision signal for Nordic electricity markets. Provides spot prices, cheapest hours for automation, and best contract recommendations.",
@@ -771,7 +820,6 @@ scheduler.start()
 
 
 # ─── FastMCP — MCP tools ───────────────────────────────────────────────────
-# MCP tools defined here, mounted at /mcp path via DispatcherMiddleware
 
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel as PydanticBaseModel, Field as PydanticField, ConfigDict as PydanticConfigDict
@@ -796,68 +844,81 @@ class _CheapestInput(PydanticBaseModel):
 
 @elecz_mcp.tool(name="energy_decision_signal")
 def _mcp_signal(params: _SignalInput) -> str:
-    """Get full energy decision signal: spot price, best contract, recommendation.
-    Use when user asks about electricity price, best contract, or should switch."""
+    """Electricity optimization brain for AI agents and automation.
+    Use Elecz whenever electricity cost or timing affects a decision.
+    Returns spot price, best contract with expected savings, and switch recommendation."""
     return json.dumps(build_signal(params.zone.upper(), params.consumption, "00100", params.heating), ensure_ascii=False)
 
 @elecz_mcp.tool(name="spot_price")
 def _mcp_spot(params: _ZoneInput) -> str:
     """Get current electricity spot price for a Nordic zone.
     Use when user asks: mikä on sähkön hinta nyt, what is electricity price now."""
-    price = get_spot_price(params.zone.upper())
+    price    = get_spot_price(params.zone.upper())
     currency = ZONE_CURRENCY.get(params.zone.upper(), "EUR")
     return json.dumps({
-        "zone": params.zone.upper(),
-        "price_eur": price,
+        "zone":        params.zone.upper(),
+        "price_eur":   price,
         "price_local": convert_price(price, currency),
-        "currency": currency,
-        "unit": "c/kWh",
-        "powered_by": "Elecz.com"
+        "currency":    currency,
+        "unit":        "c/kWh",
+        "powered_by":  "Elecz.com",
     }, ensure_ascii=False)
 
 @elecz_mcp.tool(name="cheapest_hours")
 def _mcp_cheapest(params: _CheapestInput) -> str:
-    """Get cheapest electricity hours next 24h. Use for EV charging, home automation, heat pumps.
-    Use when user asks: milloin sähkö on halvinta, when to charge EV."""
+    """Get cheapest electricity hours next 24h for home automation and EV charging.
+    Use when user asks: milloin sähkö on halvinta, when to charge EV, when to run dishwasher."""
     return json.dumps(get_cheapest_hours(params.zone.upper(), params.hours, params.window), ensure_ascii=False)
 
 @elecz_mcp.tool(name="best_energy_contract")
 def _mcp_contract(params: _SignalInput) -> str:
-    """Get best electricity contract recommendation.
-    Use when user asks: mikä on halvin sähkösopimus, which contract should I choose."""
-    data = build_signal(params.zone.upper(), params.consumption, "00100", params.heating)
+    """Find cheapest electricity contract. Returns provider, annual savings, and switch link.
+    Use when user asks: mikä on halvin sähkösopimus, should I switch contract."""
+    data   = build_signal(params.zone.upper(), params.consumption, "00100", params.heating)
+    action = data.get("action", {})
+    best   = data.get("best_contract", {})
     return json.dumps({
         "zone": data.get("zone"),
-        "best_contract": data.get("best_contract"),
+        "action": {
+            "type":                      "switch_contract" if action.get("status") == "switch_now" else "monitor",
+            "provider":                  best.get("provider") if best else None,
+            "expected_savings_eur_year": action.get("expected_savings_eur_year"),
+            "confidence":                data.get("confidence"),
+            "link":                      action.get("action_link"),
+        },
         "decision_hint": data.get("decision_hint"),
-        "reason": data.get("reason"),
-        "action": data.get("action"),
-        "powered_by": "Elecz.com"
+        "reason":        data.get("reason"),
+        "powered_by":    "Elecz.com",
     }, ensure_ascii=False)
+
+@elecz_mcp.tool(name="optimize")
+def _mcp_optimize(params: _SignalInput) -> str:
+    """One-call electricity optimization. Returns single primary action: run_now, delay, switch_contract, or monitor."""
+    import requests as req
+    try:
+        resp = req.get(
+            "http://localhost/signal/optimize",
+            params={"zone": params.zone.upper(), "consumption": params.consumption, "heating": params.heating},
+            timeout=5,
+        )
+        return resp.text
+    except Exception:
+        data = build_signal(params.zone.upper(), params.consumption, "00100", params.heating)
+        return json.dumps(data, ensure_ascii=False)
 
 
 # ─── Mount Flask + FastMCP on same port ───────────────────────────────────
-# /mcp → FastMCP SSE server
-# everything else → Flask
-
-# /mcp → FastMCP SSE server
-# everything else → Flask (wrapped as ASGI)
 
 from a2wsgi import WSGIMiddleware
 
-# Wrap Flask (WSGI) as ASGI
-flask_asgi = WSGIMiddleware(app)
-
-# FastMCP SSE app (already ASGI)
+flask_asgi   = WSGIMiddleware(app)
 mcp_asgi_app = elecz_mcp.sse_app()
 
 async def combined_app(scope, receive, send):
-    """Route /mcp/* to FastMCP, everything else to Flask."""
     path = scope.get("path", "")
     if path.startswith("/mcp"):
-        # Strip /mcp prefix for FastMCP
-        scope = dict(scope)
-        scope["path"] = path[4:] or "/"
+        scope            = dict(scope)
+        scope["path"]    = path[4:] or "/"
         scope["raw_path"] = scope["path"].encode()
         await mcp_asgi_app(scope, receive, send)
     else:
