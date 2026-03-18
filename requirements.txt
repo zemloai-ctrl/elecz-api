@@ -1,9 +1,8 @@
-flask==3.0.3
 httpx==0.27.0
 supabase==2.4.6
 redis==5.0.4
 apscheduler==3.10.4
 google-generativeai==0.7.2
-gunicorn==22.0.0
 mcp[cli]==1.9.4
-a2wsgi==1.10.7
+starlette==0.52.1
+uvicorn==0.42.0
