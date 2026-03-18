@@ -794,6 +794,18 @@ def health():
     return jsonify({"status": "ok", "service": "elecz", "version": "1.1"})
 
 
+@app.route("/favicon.ico", methods=["GET"])
+@app.route("/favicon.svg", methods=["GET"])
+def favicon():
+    """Lightning bolt favicon for Elecz."""
+    svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="6" fill="#0a0a0a"/>
+  <polygon points="18,3 8,18 15,18 14,29 24,14 17,14" fill="#f0c040"/>
+</svg>"""
+    from flask import Response
+    return Response(svg, mimetype="image/svg+xml")
+
+
 @app.route("/.well-known/mcp/server-card.json", methods=["GET"])
 def server_card():
     """Smithery server discovery card."""
