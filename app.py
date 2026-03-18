@@ -997,15 +997,30 @@ def _mcp_optimize(params: _SignalInput) -> str:
 # everything else → Flask
 
 from a2wsgi import WSGIMiddleware
+from contextlib import asynccontextmanager
+from starlette.applications import Starlette
+from starlette.routing import Mount
 
-flask_asgi   = WSGIMiddleware(app)
-mcp_sse_app  = elecz_mcp.sse_app()
+flask_asgi  = WSGIMiddleware(app)
+mcp_sse_app = elecz_mcp.sse_app()
 
+# Build streamable HTTP app with proper lifespan
 try:
     mcp_http_app = elecz_mcp.streamable_http_app()
+
+    @asynccontextmanager
+    async def lifespan(app):
+        async with mcp_http_app.router.lifespan_context(app):
+            yield
+
+    mcp_starlette = Starlette(
+        routes=[Mount("/mcp", app=mcp_http_app)],
+        lifespan=lifespan,
+    )
+    USE_STREAMABLE = True
+    logger.info("Streamable HTTP MCP enabled at /mcp")
 except AttributeError:
-    # FastMCP version doesn't support streamable_http_app, fall back to SSE
-    mcp_http_app = mcp_sse_app
+    USE_STREAMABLE = False
     logger.warning("streamable_http_app not available, using SSE for /mcp")
 
 async def combined_app(scope, receive, send):
@@ -1016,10 +1031,9 @@ async def combined_app(scope, receive, send):
         scope["path"]     = path[4:] or "/"
         scope["raw_path"] = scope["path"].encode()
         await mcp_sse_app(scope, receive, send)
-    elif path == "/mcp" or path == "/mcp/":
+    elif (path == "/mcp" or path.startswith("/mcp/")) and USE_STREAMABLE:
         # Streamable HTTP transport for Smithery and modern MCP clients
-        # Keep path as /mcp — FastMCP 1.9.4 handles it natively
-        await mcp_http_app(scope, receive, send)
+        await mcp_starlette(scope, receive, send)
     else:
         await flask_asgi(scope, receive, send)
 
