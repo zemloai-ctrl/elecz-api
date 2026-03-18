@@ -997,43 +997,39 @@ def _mcp_optimize(params: _SignalInput) -> str:
 # everything else → Flask
 
 from a2wsgi import WSGIMiddleware
-from contextlib import asynccontextmanager
-from starlette.applications import Starlette
-from starlette.routing import Mount
 
 flask_asgi  = WSGIMiddleware(app)
 mcp_sse_app = elecz_mcp.sse_app()
 
-# Build streamable HTTP app with proper lifespan
+# FastMCP 1.9.4 streamable HTTP — mount at root, we handle /mcp prefix ourselves
 try:
     mcp_http_app = elecz_mcp.streamable_http_app()
-
-    @asynccontextmanager
-    async def lifespan(app):
-        async with mcp_http_app.router.lifespan_context(app):
-            yield
-
-    mcp_starlette = Starlette(
-        routes=[Mount("/mcp", app=mcp_http_app)],
-        lifespan=lifespan,
-    )
-    USE_STREAMABLE = True
-    logger.info("Streamable HTTP MCP enabled at /mcp")
+    logger.info("Streamable HTTP MCP app created")
 except AttributeError:
-    USE_STREAMABLE = False
-    logger.warning("streamable_http_app not available, using SSE for /mcp")
+    mcp_http_app = None
+    logger.warning("streamable_http_app not available")
 
 async def combined_app(scope, receive, send):
     path = scope.get("path", "")
+
     if path.startswith("/mcp/sse"):
         # SSE transport — strip /mcp prefix
         scope = dict(scope)
         scope["path"]     = path[4:] or "/"
         scope["raw_path"] = scope["path"].encode()
         await mcp_sse_app(scope, receive, send)
-    elif (path == "/mcp" or path.startswith("/mcp/")) and USE_STREAMABLE:
-        # Streamable HTTP transport for Smithery and modern MCP clients
-        await mcp_starlette(scope, receive, send)
+
+    elif path == "/mcp" or path.startswith("/mcp/"):
+        if mcp_http_app:
+            # Strip /mcp prefix, pass remainder to streamable HTTP
+            remainder = path[4:] or "/"
+            scope = dict(scope)
+            scope["path"]     = remainder
+            scope["raw_path"] = remainder.encode()
+            await mcp_http_app(scope, receive, send)
+        else:
+            await flask_asgi(scope, receive, send)
+
     else:
         await flask_asgi(scope, receive, send)
 
