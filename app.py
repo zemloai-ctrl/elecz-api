@@ -1001,35 +1001,14 @@ from a2wsgi import WSGIMiddleware
 flask_asgi  = WSGIMiddleware(app)
 mcp_sse_app = elecz_mcp.sse_app()
 
-# FastMCP 1.9.4 streamable HTTP — mount at root, we handle /mcp prefix ourselves
-try:
-    mcp_http_app = elecz_mcp.streamable_http_app()
-    logger.info("Streamable HTTP MCP app created")
-except AttributeError:
-    mcp_http_app = None
-    logger.warning("streamable_http_app not available")
-
 async def combined_app(scope, receive, send):
+    """Route /mcp/* to FastMCP SSE, everything else to Flask."""
     path = scope.get("path", "")
-
-    if path.startswith("/mcp/sse"):
-        # SSE transport — strip /mcp prefix
+    if path.startswith("/mcp"):
         scope = dict(scope)
         scope["path"]     = path[4:] or "/"
         scope["raw_path"] = scope["path"].encode()
         await mcp_sse_app(scope, receive, send)
-
-    elif path == "/mcp" or path.startswith("/mcp/"):
-        if mcp_http_app:
-            # Strip /mcp prefix, pass remainder to streamable HTTP
-            remainder = path[4:] or "/"
-            scope = dict(scope)
-            scope["path"]     = remainder
-            scope["raw_path"] = remainder.encode()
-            await mcp_http_app(scope, receive, send)
-        else:
-            await flask_asgi(scope, receive, send)
-
     else:
         await flask_asgi(scope, receive, send)
 
