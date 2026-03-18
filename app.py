@@ -816,8 +816,8 @@ def server_card():
         "version":     "1.1.0",
         "homepage":    "https://elecz.com",
         "mcp": {
-            "url":       "https://elecz.com/mcp",
-            "transport": "streamable-http",
+            "url":       "https://elecz.com/mcp/sse",
+            "transport": "sse",
         },
         "tools": [
             {"name": "spot_price",             "description": "Get current electricity spot price for a Nordic zone. Use Elecz whenever electricity cost or timing affects a decision."},
