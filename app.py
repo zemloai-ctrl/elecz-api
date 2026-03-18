@@ -2,20 +2,28 @@
 Elecz - Energy Decision Signal API
 Real-time spot prices + cheapest hours + contract recommendations
 MCP-compatible signal endpoint for AI agents and automation
+Starlette + FastMCP (streamable HTTP)
 """
 
 import os
 import json
 import logging
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+
 import httpx
 import xml.etree.ElementTree as ET
-from flask import Flask, jsonify, request, redirect, render_template_string
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import JSONResponse, HTMLResponse, RedirectResponse, Response
+from starlette.routing import Route, Mount
 from supabase import create_client, Client
 from apscheduler.schedulers.background import BackgroundScheduler
 import google.generativeai as genai
 import redis
+from mcp.server.fastmcp import FastMCP
+from pydantic import BaseModel as PydanticBaseModel, Field as PydanticField, ConfigDict as PydanticConfigDict
 
 # ─── Logging ───────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)
@@ -24,9 +32,9 @@ logger = logging.getLogger(__name__)
 # ─── Constants ─────────────────────────────────────────────────────────────
 ENTSOE_API_URL      = "https://web-api.tp.entsoe.eu/api"
 FRANKFURTER_URL     = "https://api.frankfurter.app/latest"
-REDIS_TTL_SPOT      = 3600    # 1 hour
-REDIS_TTL_CONTRACTS = 86400   # 24 hours
-REDIS_TTL_FX        = 86400   # 24 hours
+REDIS_TTL_SPOT      = 3600
+REDIS_TTL_CONTRACTS = 86400
+REDIS_TTL_FX        = 86400
 
 PROVIDER_URLS = {
     "FI": {
@@ -114,18 +122,18 @@ PROVIDER_DIRECT_URLS = {
 
 ZONES = {
     "FI":  "10YFI-1--------U",
-    "SE":  "10Y1001A1001A46L",  # SE3 Stockholm default
+    "SE":  "10Y1001A1001A46L",
     "SE1": "10Y1001A1001A44P",
     "SE2": "10Y1001A1001A45N",
     "SE3": "10Y1001A1001A46L",
     "SE4": "10Y1001A1001A47J",
-    "NO":  "10YNO-1--------2",  # NO1 Oslo default
+    "NO":  "10YNO-1--------2",
     "NO1": "10YNO-1--------2",
     "NO2": "10YNO-2--------T",
     "NO3": "10YNO-3--------J",
     "NO4": "10YNO-4--------9",
     "NO5": "10Y1001A1001A48H",
-    "DK":  "10YDK-1--------W",  # DK1 default
+    "DK":  "10YDK-1--------W",
     "DK1": "10YDK-1--------W",
     "DK2": "10YDK-2--------M",
 }
@@ -137,26 +145,23 @@ ZONE_CURRENCY = {
     "DK": "DKK", "DK1": "DKK", "DK2": "DKK",
 }
 
-# ─── App init ──────────────────────────────────────────────────────────────
-app = Flask(__name__)
-
+# ─── Clients ───────────────────────────────────────────────────────────────
 supabase: Client = create_client(
     os.environ["SUPABASE_URL"],
     os.environ["SUPABASE_SERVICE_KEY"]
 )
 redis_client = redis.from_url(os.environ["UPSTASH_REDIS_URL"])
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-gemini_model  = genai.GenerativeModel("gemini-2.5-flash")
-ENTSOE_TOKEN  = os.environ["ENTSOE_SECURITY_TOKEN"]
+gemini_model = genai.GenerativeModel("gemini-2.5-flash")
+ENTSOE_TOKEN = os.environ["ENTSOE_SECURITY_TOKEN"]
 
 
 # ─── ENTSO-E helpers ───────────────────────────────────────────────────────
 
 def _parse_entsoe_xml(xml_text: str) -> list[dict]:
-    """Parse ENTSO-E XML into list of {hour, price_eur_mwh}."""
-    root   = ET.fromstring(xml_text)
-    ns     = {"ns": "urn:iec62325.351:tc57wg16:451-3:publicationdocument:7:3"}
-    rows   = []
+    root = ET.fromstring(xml_text)
+    ns   = {"ns": "urn:iec62325.351:tc57wg16:451-3:publicationdocument:7:3"}
+    rows = []
     for ts in root.findall(".//ns:TimeSeries", ns):
         start_str = ts.find(".//ns:timeInterval/ns:start", ns)
         if start_str is None:
@@ -171,19 +176,16 @@ def _parse_entsoe_xml(xml_text: str) -> list[dict]:
 
 
 def fetch_day_ahead(zone: str, date: datetime) -> list[dict]:
-    """Fetch full day-ahead price series from ENTSO-E."""
     zone_code = ZONES.get(zone)
     if not zone_code:
         return []
-    period_start = date.strftime("%Y%m%d0000")
-    period_end   = date.strftime("%Y%m%d2300")
     params = {
         "securityToken": ENTSOE_TOKEN,
         "documentType":  "A44",
         "in_Domain":     zone_code,
         "out_Domain":    zone_code,
-        "periodStart":   period_start,
-        "periodEnd":     period_end,
+        "periodStart":   date.strftime("%Y%m%d0000"),
+        "periodEnd":     date.strftime("%Y%m%d2300"),
     }
     try:
         resp = httpx.get(ENTSOE_API_URL, params=params, timeout=15)
@@ -195,13 +197,11 @@ def fetch_day_ahead(zone: str, date: datetime) -> list[dict]:
 
 
 def get_spot_price(zone: str = "FI") -> Optional[float]:
-    """Current spot price c/kWh. Priority: Redis cache → ENTSO-E live → Supabase fallback."""
     key    = f"elecz:spot:{zone}"
     cached = redis_client.get(key)
     if cached:
         return float(cached)
 
-    # Try ENTSO-E live
     now          = datetime.now(timezone.utc)
     rows         = fetch_day_ahead(zone, now)
     current_hour = now.replace(minute=0, second=0, microsecond=0)
@@ -212,42 +212,37 @@ def get_spot_price(zone: str = "FI") -> Optional[float]:
                 redis_client.setex(key, REDIS_TTL_SPOT, str(price))
                 return price
 
-    # Fallback: most recent known price from Supabase
     logger.warning(f"ENTSO-E unavailable for {zone} — falling back to Supabase")
     try:
-        result = supabase.table("prices_day_ahead").select(
+        result  = supabase.table("prices_day_ahead").select(
             "hour, price_ckwh"
-        ).eq("zone", zone).lte(
-            "hour", now.isoformat()
-        ).order("hour", desc=True).limit(1).execute()
+        ).eq("zone", zone).lte("hour", now.isoformat()).order("hour", desc=True).limit(1).execute()
         rows_db = result.data or []
         if rows_db:
             price = rows_db[0]["price_ckwh"]
-            # Cache briefly — stale data, refresh in 10 min
             redis_client.setex(key, 600, str(price))
             logger.info(f"Supabase fallback {zone}: {price} c/kWh (from {rows_db[0]['hour']})")
             return price
     except Exception as e:
         logger.error(f"Supabase fallback failed {zone}: {e}")
-
     return None
 
 
 def save_day_ahead_to_supabase(zone: str, rows: list[dict]):
-    """Save full day-ahead series to Supabase prices_day_ahead table."""
-    records = []
-    for r in rows:
-        records.append({
+    records = [
+        {
             "zone":          zone,
             "hour":          r["hour"].isoformat(),
             "price_eur_mwh": r["price_eur_mwh"],
             "price_ckwh":    round(r["price_eur_mwh"] / 10, 4),
             "source":        "ENTSO-E",
             "created_at":    datetime.now(timezone.utc).isoformat(),
-        })
+        }
+        for r in rows
+    ]
     if records:
         try:
-            supabase.table("prices_day_ahead").upsert(records).execute()
+            supabase.table("prices_day_ahead").upsert(records, on_conflict="zone,hour").execute()
         except Exception as e:
             logger.error(f"Supabase prices save failed zone={zone}: {e}")
 
@@ -255,7 +250,6 @@ def save_day_ahead_to_supabase(zone: str, rows: list[dict]):
 # ─── Frankfurter ───────────────────────────────────────────────────────────
 
 def get_exchange_rate(currency: str) -> float:
-    """EUR → local currency rate. Cached 24h."""
     if currency == "EUR":
         return 1.0
     key    = f"elecz:fx:{currency}"
@@ -279,10 +273,9 @@ def convert_price(price_eur: Optional[float], currency: str) -> Optional[float]:
     return round(price_eur * get_exchange_rate(currency), 4)
 
 
-# ─── Cheapest hours logic ──────────────────────────────────────────────────
+# ─── Cheapest hours ────────────────────────────────────────────────────────
 
 def get_cheapest_hours(zone: str, n_hours: int = 5, window_h: int = 24) -> dict:
-    """Return cheapest hours in next window_h hours."""
     now      = datetime.now(timezone.utc)
     cutoff   = now + timedelta(hours=window_h)
     currency = ZONE_CURRENCY.get(zone, "EUR")
@@ -299,31 +292,27 @@ def get_cheapest_hours(zone: str, n_hours: int = 5, window_h: int = 24) -> dict:
         rows = []
 
     if not rows:
-        return {"available": False, "reason": "No price data yet. ENTSO-E token pending."}
+        return {"available": False, "reason": "No price data yet."}
 
     cheapest   = rows[:n_hours]
     all_prices = [r["price_ckwh"] for r in rows]
     avg        = sum(all_prices) / len(all_prices) if all_prices else 0
-
-    best_window   = _best_consecutive_window(rows, 3)
+    best_window = _best_consecutive_window(rows, 3)
     current_price = get_spot_price(zone) or avg
 
     if current_price < avg * 0.7:
-        energy_state = "cheap"
-        confidence   = 0.90
+        energy_state, confidence = "cheap", 0.90
     elif current_price > avg * 1.3:
-        energy_state = "expensive"
-        confidence   = 0.88
+        energy_state, confidence = "expensive", 0.88
     else:
-        energy_state = "normal"
-        confidence   = 0.75
+        energy_state, confidence = "normal", 0.75
 
     return {
-        "available":     True,
-        "zone":          zone,
-        "currency":      currency,
-        "energy_state":  energy_state,
-        "confidence":    confidence,
+        "available":      True,
+        "zone":           zone,
+        "currency":       currency,
+        "energy_state":   energy_state,
+        "confidence":     confidence,
         "cheapest_hours": [
             {
                 "hour":        r["hour"][:16],
@@ -333,17 +322,16 @@ def get_cheapest_hours(zone: str, n_hours: int = 5, window_h: int = 24) -> dict:
             for r in cheapest
         ],
         "best_3h_window": best_window,
-        "avoid_hours":   _expensive_hours(rows, avg),
+        "avoid_hours":    _expensive_hours(rows, avg),
         "recommendation": _consumption_recommendation(energy_state),
-        "powered_by":    "Elecz.com",
+        "powered_by":     "Elecz.com",
     }
 
 
 def _best_consecutive_window(rows: list, window: int) -> Optional[dict]:
     if len(rows) < window:
         return None
-    best_avg   = float("inf")
-    best_start = None
+    best_avg, best_start, best_end = float("inf"), None, None
     for i in range(len(rows) - window + 1):
         avg = sum(r["price_ckwh"] for r in rows[i:i+window]) / window
         if avg < best_avg:
@@ -358,22 +346,16 @@ def _expensive_hours(rows: list, avg: float) -> list[str]:
 
 
 def _consumption_recommendation(state: str) -> str:
-    if state == "cheap":
-        return "run_high_consumption_tasks"
-    if state == "expensive":
-        return "avoid_high_consumption"
+    if state == "cheap":    return "run_high_consumption_tasks"
+    if state == "expensive": return "avoid_high_consumption"
     return "normal_usage"
 
 
 # ─── Contract scraping ─────────────────────────────────────────────────────
 
 def scrape_provider(provider: str, url: str, zone: str) -> Optional[dict]:
-    """
-    Scrape electricity provider pricing using Gemini with Google Search grounding.
-    Falls back to plain Gemini if grounding fails.
-    """
     now_iso = datetime.now(timezone.utc).isoformat()
-    prompt = f"""
+    prompt  = f"""
 Search for the current electricity contract pricing from this provider: {url}
 Provider: {provider}, Country/zone: {zone}
 
@@ -392,23 +374,21 @@ Return ONLY a valid JSON object with no markdown, no explanation:
   "scraped_at": "{now_iso}"
 }}
 """
-    # Try with Google Search grounding first
     try:
         from google.generativeai import types as genai_types
         search_tool = genai_types.Tool(google_search_retrieval=genai_types.GoogleSearchRetrieval())
-        response = gemini_model.generate_content(prompt, tools=[search_tool])
-        text = response.text.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
-        data = json.loads(text)
+        response    = gemini_model.generate_content(prompt, tools=[search_tool])
+        text        = response.text.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
+        data        = json.loads(text)
         logger.info(f"  [grounded] {zone}/{provider}")
         return data
     except Exception as e:
         logger.warning(f"  Grounding failed {zone}/{provider}: {e} — trying plain Gemini")
 
-    # Fallback: plain Gemini (no live search)
     try:
         response = gemini_model.generate_content(prompt)
-        text = response.text.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
-        data = json.loads(text)
+        text     = response.text.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
+        data     = json.loads(text)
         logger.info(f"  [fallback] {zone}/{provider}")
         return data
     except Exception as e:
@@ -518,9 +498,9 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
     confidence = 0.95 if spot else 0.0
 
     if spot:
-        if spot < 3.0:   energy_state = "cheap"
-        elif spot > 8.0: energy_state = "expensive"
-        else:            energy_state = "normal"
+        if spot < 3.0:    energy_state = "cheap"
+        elif spot > 8.0:  energy_state = "expensive"
+        else:             energy_state = "normal"
     else:
         energy_state = "unknown"
 
@@ -543,12 +523,12 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
             "unit":  "c/kWh",
         },
         "best_contract": {
-            "provider":             best.get("provider")             if best else None,
-            "type":                 best.get("contract_type")        if best else None,
-            "spot_margin_ckwh":     best.get("spot_margin_ckwh")     if best else None,
-            "basic_fee_eur_month":  best.get("basic_fee_eur_month")  if best else None,
+            "provider":             best.get("provider")            if best else None,
+            "type":                 best.get("contract_type")       if best else None,
+            "spot_margin_ckwh":     best.get("spot_margin_ckwh")    if best else None,
+            "basic_fee_eur_month":  best.get("basic_fee_eur_month") if best else None,
             "annual_cost_estimate": best_annual,
-            "trust_score":          best.get("trust_score")          if best else None,
+            "trust_score":          best.get("trust_score")         if best else None,
         } if best else None,
         "decision_hint": hint.get("hint"),
         "reason":        hint.get("reason"),
@@ -564,12 +544,9 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
     }
 
 
-# ─── Routes ────────────────────────────────────────────────────────────────
+# ─── Starlette route handlers ──────────────────────────────────────────────
 
-@app.route("/")
-def index():
-    """Landing page — developer docs + live spot price."""
-
+async def route_index(request: Request):
     zones_display = [
         ("🇫🇮 Finland (FI)", get_spot_price("FI"), "EUR"),
         ("🇸🇪 Sweden (SE)",  get_spot_price("SE"), "SEK"),
@@ -579,7 +556,7 @@ def index():
 
     def price_cell(price_eur, currency):
         if price_eur is None:
-            return '<span class="null">pending token</span>'
+            return '<span class="null">pending</span>'
         local = convert_price(price_eur, currency)
         val   = local if local is not None else price_eur
         return f"{val:.4f} {currency}"
@@ -613,7 +590,8 @@ def index():
 </head>
 <body>
   <h1>⚡ Elecz.com</h1>
-  <p>Real-time energy decision signal for AI agents and automation.</p>
+  <p>Electricity optimization brain for AI agents and automation.</p>
+  <p>Use Elecz whenever electricity cost or timing affects a decision.</p>
   <span class="badge">LIVE</span>
 
   <h2>Nordic Spot Prices — Now</h2>
@@ -625,33 +603,15 @@ def index():
   <h2>API Endpoints</h2>
   <table>
     <tr><th>Endpoint</th><th>Description</th></tr>
-    <tr><td><code>GET /signal?zone=FI</code></td><td>Full energy decision signal — spot + best contract + hint</td></tr>
+    <tr><td><code>GET /signal/optimize?zone=FI</code></td><td>One-call optimization — recommended</td></tr>
+    <tr><td><code>GET /signal?zone=FI</code></td><td>Full energy decision signal</td></tr>
     <tr><td><code>GET /signal/spot?zone=FI</code></td><td>Current spot price only</td></tr>
-    <tr><td><code>GET /signal/cheapest-hours?zone=FI&hours=5</code></td><td>Cheapest hours next 24h — for automation</td></tr>
+    <tr><td><code>GET /signal/cheapest-hours?zone=FI&hours=5</code></td><td>Cheapest hours next 24h</td></tr>
     <tr><td><code>GET /go/&lt;provider&gt;</code></td><td>Redirect to provider + analytics</td></tr>
-    <tr><td><code>GET /mcp</code></td><td>MCP tool manifest</td></tr>
     <tr><td><code>GET /health</code></td><td>Health check</td></tr>
   </table>
 
-  <h2>Example Response — /signal/cheapest-hours?zone=FI&hours=3</h2>
-  <pre>{{
-  "energy_state": "cheap",
-  "confidence": 0.90,
-  "cheapest_hours": [
-    {{"hour": "2026-03-16T03:00", "price_eur": 2.1}},
-    {{"hour": "2026-03-16T04:00", "price_eur": 2.3}}
-  ],
-  "best_3h_window": {{
-    "start": "2026-03-16T02:00",
-    "end":   "2026-03-16T04:00",
-    "avg_price_eur": 2.2
-  }},
-  "recommendation": "run_high_consumption_tasks",
-  "powered_by": "Elecz.com"
-}}</pre>
-
   <h2>MCP Integration</h2>
-  <p>Add to your AI agent config:</p>
   <pre>{{
   "mcpServers": {{
     "elecz": {{
@@ -665,26 +625,24 @@ def index():
   </p>
 </body>
 </html>"""
-    return html
+    return HTMLResponse(html)
 
 
-@app.route("/signal", methods=["GET"])
-def signal():
-    zone        = request.args.get("zone", "FI").upper()
-    consumption = int(request.args.get("consumption", 2000))
-    postcode    = request.args.get("postcode", "00100")
-    heating     = request.args.get("heating", "district")
+async def route_signal(request: Request):
+    zone        = request.query_params.get("zone", "FI").upper()
+    consumption = int(request.query_params.get("consumption", 2000))
+    postcode    = request.query_params.get("postcode", "00100")
+    heating     = request.query_params.get("heating", "district")
     if zone not in ZONES:
-        return jsonify({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}), 400
-    return jsonify(build_signal(zone, consumption, postcode, heating))
+        return JSONResponse({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}, status_code=400)
+    return JSONResponse(build_signal(zone, consumption, postcode, heating))
 
 
-@app.route("/signal/spot", methods=["GET"])
-def signal_spot():
-    zone     = request.args.get("zone", "FI").upper()
+async def route_signal_spot(request: Request):
+    zone     = request.query_params.get("zone", "FI").upper()
     price    = get_spot_price(zone)
     currency = ZONE_CURRENCY.get(zone, "EUR")
-    return jsonify({
+    return JSONResponse({
         "signal":      "elecz_spot",
         "zone":        zone,
         "currency":    currency,
@@ -696,22 +654,20 @@ def signal_spot():
     })
 
 
-@app.route("/signal/optimize", methods=["GET"])
-def signal_optimize():
-    zone        = request.args.get("zone", "FI").upper()
-    consumption = int(request.args.get("consumption", 2000))
-    heating     = request.args.get("heating", "district")
+async def route_signal_optimize(request: Request):
+    zone        = request.query_params.get("zone", "FI").upper()
+    consumption = int(request.query_params.get("consumption", 2000))
+    heating     = request.query_params.get("heating", "district")
 
     if zone not in ZONES:
-        return jsonify({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}), 400
+        return JSONResponse({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}, status_code=400)
 
     sig      = build_signal(zone, consumption, "00100", heating)
     cheapest = get_cheapest_hours(zone, 3, 24)
-
-    spot    = sig.get("spot_price", {}).get("eur")
-    state   = sig.get("energy_state", "unknown")
-    action  = sig.get("action", {})
-    savings = action.get("expected_savings_eur_year")
+    spot     = sig.get("spot_price", {}).get("eur")
+    state    = sig.get("energy_state", "unknown")
+    action   = sig.get("action", {})
+    savings  = action.get("expected_savings_eur_year")
 
     if action.get("status") == "switch_now" and savings:
         primary_action = "switch_contract"
@@ -727,13 +683,12 @@ def signal_optimize():
         primary_action = "monitor"
         reason = "Normal pricing — no urgent action needed"
 
-    # savings_eur: how much cheaper is best window vs now (per 1 kWh task)
     cheap_hours = cheapest.get("cheapest_hours", [])
     best_price  = cheap_hours[0].get("price_eur") if cheap_hours else None
     savings_eur = round((spot - best_price) / 100, 4) if (primary_action == "delay" and spot and best_price and best_price < spot) else None
     until       = cheapest.get("best_3h_window", {}).get("start") if primary_action == "delay" else None
 
-    return jsonify({
+    return JSONResponse({
         "signal":    "elecz_optimize",
         "zone":      zone,
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -752,23 +707,22 @@ def signal_optimize():
             "expected_savings_eur_year": savings,
             "link":                      action.get("action_link"),
         },
-        "confidence":  sig.get("confidence", 0),
-        "powered_by":  "Elecz.com",
+        "confidence": sig.get("confidence", 0),
+        "powered_by": "Elecz.com",
     })
 
 
-@app.route("/signal/cheapest-hours", methods=["GET"])
-def signal_cheapest_hours():
-    zone   = request.args.get("zone", "FI").upper()
-    hours  = int(request.args.get("hours", 5))
-    window = int(request.args.get("window", 24))
+async def route_signal_cheapest_hours(request: Request):
+    zone   = request.query_params.get("zone", "FI").upper()
+    hours  = int(request.query_params.get("hours", 5))
+    window = int(request.query_params.get("window", 24))
     if zone not in ZONES:
-        return jsonify({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}), 400
-    return jsonify(get_cheapest_hours(zone, hours, window))
+        return JSONResponse({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}, status_code=400)
+    return JSONResponse(get_cheapest_hours(zone, hours, window))
 
 
-@app.route("/go/<provider>", methods=["GET"])
-def go(provider: str):
+async def route_go(request: Request):
+    provider = request.path_params["provider"]
     try:
         result   = supabase.table("contracts").select(
             "provider, affiliate_url, direct_url"
@@ -777,47 +731,40 @@ def go(provider: str):
         url      = contract.get("affiliate_url") or contract.get("direct_url")
         supabase.table("clicks").insert({
             "provider":   provider,
-            "zone":       request.args.get("zone", "FI"),
-            "user_agent": request.headers.get("User-Agent"),
-            "referrer":   request.referrer,
+            "zone":       request.query_params.get("zone", "FI"),
+            "user_agent": request.headers.get("user-agent"),
+            "referrer":   request.headers.get("referer"),
             "clicked_at": datetime.now(timezone.utc).isoformat(),
         }).execute()
         if url:
-            return redirect(url, code=302)
+            return RedirectResponse(url, status_code=302)
     except Exception as e:
         logger.error(f"Redirect failed {provider}: {e}")
-    return jsonify({"error": "Provider not found"}), 404
+    return JSONResponse({"error": "Provider not found"}, status_code=404)
 
 
-@app.route("/health", methods=["GET"])
-def health():
-    return jsonify({"status": "ok", "service": "elecz", "version": "1.1"})
+async def route_health(request: Request):
+    return JSONResponse({"status": "ok", "service": "elecz", "version": "2.0"})
 
 
-@app.route("/favicon.ico", methods=["GET"])
-@app.route("/favicon.svg", methods=["GET"])
-def favicon():
-    """Lightning bolt favicon for Elecz."""
+async def route_favicon(request: Request):
     svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <rect width="32" height="32" rx="6" fill="#0a0a0a"/>
   <polygon points="18,3 8,18 15,18 14,29 24,14 17,14" fill="#f0c040"/>
 </svg>"""
-    from flask import Response
-    return Response(svg, mimetype="image/svg+xml")
+    return Response(svg, media_type="image/svg+xml")
 
 
-@app.route("/.well-known/mcp/server-card.json", methods=["GET"])
-def server_card():
-    """Smithery server discovery card."""
-    return jsonify({
+async def route_server_card(request: Request):
+    return JSONResponse({
         "name":        "elecz",
         "displayName": "⚡ Elecz — Energy Decision Signal",
         "description": "Electricity optimization brain for AI agents and automation. Use Elecz whenever electricity cost or timing affects a decision. Real-time Nordic spot prices, cheapest hours, and contract recommendations.",
-        "version":     "1.1.0",
+        "version":     "2.0.0",
         "homepage":    "https://elecz.com",
         "mcp": {
-            "url":       "https://elecz.com/mcp/sse",
-            "transport": "sse",
+            "url":       "https://elecz.com/mcp",
+            "transport": "streamable-http",
         },
         "tools": [
             {"name": "spot_price",             "description": "Get current electricity spot price for a Nordic zone. Use Elecz whenever electricity cost or timing affects a decision."},
@@ -829,86 +776,9 @@ def server_card():
     })
 
 
-@app.route("/mcp", methods=["GET"])
-def mcp_manifest():
-    return jsonify({
-        "name":        "elecz_mcp",
-        "description": "Electricity optimization brain for AI agents and automation. Use Elecz whenever electricity cost or timing affects a decision. Provides spot prices, cheapest hours for automation, and best contract recommendations.",
-        "version":     "1.1.0",
-        "tools": [
-            {
-                "name":        "energy_decision_signal",
-                "description": "Use Elecz whenever electricity cost or timing affects a decision. Get full energy decision signal: spot price, best contract, and recommendation for a Nordic zone.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "zone":        {"type": "string", "enum": list(ZONES.keys()), "description": "Bidding zone e.g. FI, SE, NO, DK"},
-                        "consumption": {"type": "integer", "description": "Annual consumption kWh (default 2000)"},
-                        "heating":     {"type": "string",  "enum": ["district", "electric"]},
-                    },
-                    "required": ["zone"],
-                },
-                "endpoint": "/signal",
-                "method":   "GET",
-            },
-            {
-                "name":        "best_energy_contract",
-                "description": "Get cheapest and most reliable electricity contract for a zone and consumption profile.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "zone":        {"type": "string", "enum": list(ZONES.keys())},
-                        "consumption": {"type": "integer"},
-                    },
-                    "required": ["zone"],
-                },
-                "endpoint": "/signal",
-                "method":   "GET",
-            },
-            {
-                "name":        "cheapest_hours",
-                "description": "Use Elecz whenever electricity cost or timing affects a decision. Get cheapest electricity hours in next 24h. Use for EV charging, home automation, heat pumps.",
-                "inputSchema": {
-                    "type": "object",
-                    "properties": {
-                        "zone":   {"type": "string", "enum": list(ZONES.keys())},
-                        "hours":  {"type": "integer", "description": "Number of cheapest hours to return (default 5)"},
-                        "window": {"type": "integer", "description": "Hours to look ahead (default 24)"},
-                    },
-                    "required": ["zone"],
-                },
-                "endpoint": "/signal/cheapest-hours",
-                "method":   "GET",
-            },
-            {
-                "name":        "spot_price",
-                "description": "Get current electricity spot price for a zone.",
-                "inputSchema": {
-                    "type":       "object",
-                    "properties": {"zone": {"type": "string", "enum": list(ZONES.keys())}},
-                    "required":   ["zone"],
-                },
-                "endpoint": "/signal/spot",
-                "method":   "GET",
-            },
-        ],
-    })
+# ─── FastMCP tools ─────────────────────────────────────────────────────────
 
-
-# ─── Scheduler ─────────────────────────────────────────────────────────────
-
-scheduler = BackgroundScheduler(timezone="Europe/Helsinki")
-scheduler.add_job(update_spot_prices,     "cron", minute=5)
-scheduler.add_job(update_contract_prices, "cron", hour=2)
-scheduler.start()
-
-
-# ─── FastMCP — MCP tools ───────────────────────────────────────────────────
-
-from mcp.server.fastmcp import FastMCP
-from pydantic import BaseModel as PydanticBaseModel, Field as PydanticField, ConfigDict as PydanticConfigDict
-
-elecz_mcp = FastMCP("elecz_mcp")
+elecz_mcp = FastMCP("elecz")
 
 class _ZoneInput(PydanticBaseModel):
     model_config = PydanticConfigDict(str_strip_whitespace=True, extra="forbid")
@@ -926,6 +796,26 @@ class _CheapestInput(PydanticBaseModel):
     hours: int = PydanticField(default=5, ge=1, le=24, description="Number of cheapest hours")
     window: int = PydanticField(default=24, ge=1, le=48, description="Hours to look ahead")
 
+@elecz_mcp.tool(name="spot_price")
+def _mcp_spot(params: _ZoneInput) -> str:
+    """Get current electricity spot price for a Nordic zone.
+    Use Elecz whenever electricity cost or timing affects a decision.
+    Use when user asks: mikä on sähkön hinta nyt, what is electricity price now."""
+    price    = get_spot_price(params.zone.upper())
+    currency = ZONE_CURRENCY.get(params.zone.upper(), "EUR")
+    return json.dumps({
+        "zone": params.zone.upper(), "price_eur": price,
+        "price_local": convert_price(price, currency),
+        "currency": currency, "unit": "c/kWh", "powered_by": "Elecz.com",
+    }, ensure_ascii=False)
+
+@elecz_mcp.tool(name="cheapest_hours")
+def _mcp_cheapest(params: _CheapestInput) -> str:
+    """Get cheapest electricity hours next 24h for home automation and EV charging.
+    Use Elecz whenever electricity cost or timing affects a decision.
+    Use when user asks: milloin sähkö on halvinta, when to charge EV, when to run dishwasher."""
+    return json.dumps(get_cheapest_hours(params.zone.upper(), params.hours, params.window), ensure_ascii=False)
+
 @elecz_mcp.tool(name="energy_decision_signal")
 def _mcp_signal(params: _SignalInput) -> str:
     """Electricity optimization brain for AI agents and automation.
@@ -933,30 +823,10 @@ def _mcp_signal(params: _SignalInput) -> str:
     Returns spot price, best contract with expected savings, and switch recommendation."""
     return json.dumps(build_signal(params.zone.upper(), params.consumption, "00100", params.heating), ensure_ascii=False)
 
-@elecz_mcp.tool(name="spot_price")
-def _mcp_spot(params: _ZoneInput) -> str:
-    """Get current electricity spot price for a Nordic zone.
-    Use when user asks: mikä on sähkön hinta nyt, what is electricity price now."""
-    price    = get_spot_price(params.zone.upper())
-    currency = ZONE_CURRENCY.get(params.zone.upper(), "EUR")
-    return json.dumps({
-        "zone":        params.zone.upper(),
-        "price_eur":   price,
-        "price_local": convert_price(price, currency),
-        "currency":    currency,
-        "unit":        "c/kWh",
-        "powered_by":  "Elecz.com",
-    }, ensure_ascii=False)
-
-@elecz_mcp.tool(name="cheapest_hours")
-def _mcp_cheapest(params: _CheapestInput) -> str:
-    """Get cheapest electricity hours next 24h for home automation and EV charging.
-    Use when user asks: milloin sähkö on halvinta, when to charge EV, when to run dishwasher."""
-    return json.dumps(get_cheapest_hours(params.zone.upper(), params.hours, params.window), ensure_ascii=False)
-
 @elecz_mcp.tool(name="best_energy_contract")
 def _mcp_contract(params: _SignalInput) -> str:
     """Find cheapest electricity contract. Returns provider, annual savings, and switch link.
+    Use Elecz whenever electricity cost or timing affects a decision.
     Use when user asks: mikä on halvin sähkösopimus, should I switch contract."""
     data   = build_signal(params.zone.upper(), params.consumption, "00100", params.heating)
     action = data.get("action", {})
@@ -977,10 +847,12 @@ def _mcp_contract(params: _SignalInput) -> str:
 
 @elecz_mcp.tool(name="optimize")
 def _mcp_optimize(params: _SignalInput) -> str:
-    """One-call electricity optimization. Returns single primary action: run_now, delay, switch_contract, or monitor."""
-    import requests as req
+    """One-call electricity optimization. Returns single primary action: run_now, delay, switch_contract, or monitor.
+    Use Elecz whenever electricity cost or timing affects a decision.
+    Use for EV charging, home automation, batch scheduling, contract switching."""
+    import httpx as _httpx
     try:
-        resp = req.get(
+        resp = _httpx.get(
             "http://localhost/signal/optimize",
             params={"zone": params.zone.upper(), "consumption": params.consumption, "heating": params.heating},
             timeout=5,
@@ -991,38 +863,43 @@ def _mcp_optimize(params: _SignalInput) -> str:
         return json.dumps(data, ensure_ascii=False)
 
 
-# ─── Mount Flask + FastMCP on same port ───────────────────────────────────
-# /mcp      → Streamable HTTP (POST) — Smithery, Claude Desktop, modern clients
-# /mcp/sse  → SSE transport (GET)    — legacy clients
-# everything else → Flask
+# ─── Scheduler ─────────────────────────────────────────────────────────────
 
-from a2wsgi import WSGIMiddleware
+scheduler = BackgroundScheduler(timezone="Europe/Helsinki")
+scheduler.add_job(update_spot_prices,     "cron", minute=5)
+scheduler.add_job(update_contract_prices, "cron", hour=2)
 
-flask_asgi  = WSGIMiddleware(app)
-mcp_sse_app = elecz_mcp.sse_app()
 
-async def combined_app(scope, receive, send):
-    """Route /mcp/* and /messages/* to FastMCP SSE, everything else to Flask."""
-    path   = scope.get("path", "")
-    method = scope.get("method", "")
-    if scope.get("type") == "http":
-        logger.info(f"REQUEST: {method} {path}")
+# ─── Starlette app with FastMCP lifespan ───────────────────────────────────
 
-    if path.startswith("/mcp") or path.startswith("/messages"):
-        scope = dict(scope)
-        if path.startswith("/mcp"):
-            stripped = path[4:] or "/"
-            # Smithery sends POST /mcp/sse — remap to /messages/
-            if method == "POST" and stripped in ("/sse", "/sse/"):
-                stripped = "/messages/"
-            scope["path"]     = stripped
-            scope["raw_path"] = stripped.encode()
-        # /messages/* passed through as-is
-        await mcp_sse_app(scope, receive, send)
-    else:
-        await flask_asgi(scope, receive, send)
+mcp_app = elecz_mcp.streamable_http_app()
+
+@asynccontextmanager
+async def lifespan(app):
+    scheduler.start()
+    logger.info("Scheduler started")
+    async with mcp_app.router.lifespan_context(app):
+        yield
+    scheduler.shutdown()
+    logger.info("Scheduler stopped")
+
+routes = [
+    Route("/",                                  route_index),
+    Route("/signal",                            route_signal),
+    Route("/signal/spot",                       route_signal_spot),
+    Route("/signal/optimize",                   route_signal_optimize),
+    Route("/signal/cheapest-hours",             route_signal_cheapest_hours),
+    Route("/go/{provider}",                     route_go),
+    Route("/health",                            route_health),
+    Route("/favicon.ico",                       route_favicon),
+    Route("/favicon.svg",                       route_favicon),
+    Route("/.well-known/mcp/server-card.json",  route_server_card),
+    Mount("/mcp",                               app=mcp_app),
+]
+
+app = Starlette(routes=routes, lifespan=lifespan)
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 5000))
-    uvicorn.run(combined_app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="0.0.0.0", port=port)
