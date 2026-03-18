@@ -348,11 +348,17 @@ def _consumption_recommendation(state: str) -> str:
 # ─── Contract scraping ─────────────────────────────────────────────────────
 
 def scrape_provider(provider: str, url: str, zone: str) -> Optional[dict]:
+    """
+    Scrape electricity provider pricing using Gemini with Google Search grounding.
+    Falls back to plain Gemini if grounding fails.
+    """
+    now_iso = datetime.now(timezone.utc).isoformat()
     prompt = f"""
-Visit this electricity provider page: {url}
-Country/zone: {zone}
+Search for the current electricity contract pricing from this provider: {url}
+Provider: {provider}, Country/zone: {zone}
 
-Extract pricing and return ONLY a valid JSON object:
+Find the current spot contract margin (öre/kWh or c/kWh), monthly basic fee, and any fixed price options.
+Return ONLY a valid JSON object with no markdown, no explanation:
 {{
   "provider": "{provider}",
   "zone": "{zone}",
@@ -363,17 +369,30 @@ Extract pricing and return ONLY a valid JSON object:
   "contract_duration_months": <int or null>,
   "new_customers_only": <bool>,
   "below_wholesale": <bool>,
-  "scraped_at": "{datetime.now(timezone.utc).isoformat()}"
+  "scraped_at": "{now_iso}"
 }}
-
-Return ONLY the JSON object. No markdown, no explanation.
 """
+    # Try with Google Search grounding first
+    try:
+        from google.generativeai import types as genai_types
+        search_tool = genai_types.Tool(google_search_retrieval=genai_types.GoogleSearchRetrieval())
+        response = gemini_model.generate_content(prompt, tools=[search_tool])
+        text = response.text.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
+        data = json.loads(text)
+        logger.info(f"  [grounded] {zone}/{provider}")
+        return data
+    except Exception as e:
+        logger.warning(f"  Grounding failed {zone}/{provider}: {e} — trying plain Gemini")
+
+    # Fallback: plain Gemini (no live search)
     try:
         response = gemini_model.generate_content(prompt)
         text = response.text.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
-        return json.loads(text)
+        data = json.loads(text)
+        logger.info(f"  [fallback] {zone}/{provider}")
+        return data
     except Exception as e:
-        logger.error(f"Gemini scrape failed {zone}/{provider}: {e}")
+        logger.error(f"  Scrape failed {zone}/{provider}: {e}")
         return None
 
 
