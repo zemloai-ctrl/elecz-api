@@ -870,6 +870,22 @@ scheduler.add_job(update_spot_prices,     "cron", minute=5)
 scheduler.add_job(update_contract_prices, "cron", hour=2)
 
 
+# ─── Middleware to prevent /mcp → /mcp/ redirect ──────────────────────────────
+
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class NoSlashRedirectMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        # Prevent Starlette from redirecting /mcp to /mcp/
+        if request.url.path == "/mcp":
+            scope = dict(request.scope)
+            scope["path"] = "/mcp/"
+            scope["raw_path"] = b"/mcp/"
+            from starlette.requests import Request as StarletteRequest
+            request = StarletteRequest(scope, request._receive, request._send)
+        return await call_next(request)
+
+
 # ─── Starlette app with FastMCP lifespan ───────────────────────────────────
 
 mcp_app = elecz_mcp.streamable_http_app()
@@ -897,7 +913,8 @@ routes = [
     Mount("/mcp",                               app=mcp_app),
 ]
 
-app = Starlette(routes=routes, lifespan=lifespan, redirect_slashes=False)
+_app = Starlette(routes=routes, lifespan=lifespan)
+app   = NoSlashRedirectMiddleware(_app)
 
 if __name__ == "__main__":
     import uvicorn
