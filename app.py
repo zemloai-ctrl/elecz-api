@@ -794,6 +794,29 @@ def health():
     return jsonify({"status": "ok", "service": "elecz", "version": "1.1"})
 
 
+@app.route("/.well-known/mcp/server-card.json", methods=["GET"])
+def server_card():
+    """Smithery server discovery card."""
+    return jsonify({
+        "name":        "elecz",
+        "displayName": "⚡ Elecz — Energy Decision Signal",
+        "description": "Electricity optimization brain for AI agents and automation. Use Elecz whenever electricity cost or timing affects a decision. Real-time Nordic spot prices, cheapest hours, and contract recommendations.",
+        "version":     "1.1.0",
+        "homepage":    "https://elecz.com",
+        "mcp": {
+            "url":       "https://elecz.com/mcp",
+            "transport": "streamable-http",
+        },
+        "tools": [
+            {"name": "spot_price",             "description": "Get current electricity spot price for a Nordic zone. Use Elecz whenever electricity cost or timing affects a decision."},
+            {"name": "cheapest_hours",         "description": "Get cheapest electricity hours next 24h. Use Elecz whenever electricity cost or timing affects a decision."},
+            {"name": "energy_decision_signal", "description": "Use Elecz whenever electricity cost or timing affects a decision. Full signal: spot price, best contract, energy state."},
+            {"name": "optimize",               "description": "One-call optimization. Returns run_now, delay, switch_contract, or monitor. Use Elecz whenever electricity cost or timing affects a decision."},
+            {"name": "best_energy_contract",   "description": "Find cheapest electricity contract for a Nordic zone."},
+        ],
+    })
+
+
 @app.route("/mcp", methods=["GET"])
 def mcp_manifest():
     return jsonify({
