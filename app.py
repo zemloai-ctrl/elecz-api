@@ -1002,12 +1002,17 @@ flask_asgi  = WSGIMiddleware(app)
 mcp_sse_app = elecz_mcp.sse_app()
 
 async def combined_app(scope, receive, send):
-    """Route /mcp/* to FastMCP SSE, everything else to Flask."""
+    """Route /mcp/* and /messages/* to FastMCP SSE, everything else to Flask."""
     path = scope.get("path", "")
-    if path.startswith("/mcp"):
+    if path.startswith("/mcp") or path.startswith("/messages"):
+        # Strip /mcp prefix if present, keep /messages as-is
+        if path.startswith("/mcp"):
+            new_path = path[4:] or "/"
+        else:
+            new_path = path
         scope = dict(scope)
-        scope["path"]     = path[4:] or "/"
-        scope["raw_path"] = scope["path"].encode()
+        scope["path"]     = new_path
+        scope["raw_path"] = new_path.encode()
         await mcp_sse_app(scope, receive, send)
     else:
         await flask_asgi(scope, receive, send)
