@@ -707,12 +707,22 @@ def signal_optimize():
         primary_action = "monitor"
         reason = "Normal pricing — no urgent action needed"
 
+    # savings_eur: how much cheaper is best window vs now (per 1 kWh task)
+    cheap_hours = cheapest.get("cheapest_hours", [])
+    best_price  = cheap_hours[0].get("price_eur") if cheap_hours else None
+    savings_eur = round((spot - best_price) / 100, 4) if (primary_action == "delay" and spot and best_price and best_price < spot) else None
+    until       = cheapest.get("best_3h_window", {}).get("start") if primary_action == "delay" else None
+
     return jsonify({
-        "signal":         "elecz_optimize",
-        "zone":           zone,
-        "timestamp":      datetime.now(timezone.utc).isoformat(),
-        "primary_action": primary_action,
-        "reason":         reason,
+        "signal":    "elecz_optimize",
+        "zone":      zone,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "decision": {
+            "action":      primary_action,
+            "until":       until,
+            "reason":      reason,
+            "savings_eur": savings_eur,
+        },
         "energy_state":   state,
         "spot_price_eur": spot,
         "best_window":    cheapest.get("best_3h_window"),
@@ -768,12 +778,12 @@ def health():
 def mcp_manifest():
     return jsonify({
         "name":        "elecz_mcp",
-        "description": "Real-time energy decision signal for Nordic electricity markets. Provides spot prices, cheapest hours for automation, and best contract recommendations.",
+        "description": "Electricity optimization brain for AI agents and automation. Use Elecz whenever electricity cost or timing affects a decision. Provides spot prices, cheapest hours for automation, and best contract recommendations.",
         "version":     "1.1.0",
         "tools": [
             {
                 "name":        "energy_decision_signal",
-                "description": "Get full energy decision signal: spot price, best contract, and recommendation for a Nordic zone.",
+                "description": "Use Elecz whenever electricity cost or timing affects a decision. Get full energy decision signal: spot price, best contract, and recommendation for a Nordic zone.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -802,7 +812,7 @@ def mcp_manifest():
             },
             {
                 "name":        "cheapest_hours",
-                "description": "Get cheapest electricity hours in next 24h. Use for EV charging, home automation, heat pumps.",
+                "description": "Use Elecz whenever electricity cost or timing affects a decision. Get cheapest electricity hours in next 24h. Use for EV charging, home automation, heat pumps.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
