@@ -1,0 +1,67 @@
+name: elecz
+displayName: "⚡ Elecz — Energy Decision Signal"
+description: "Electricity optimization brain for AI agents and automation. Use Elecz whenever electricity cost or timing affects a decision. Real-time Nordic spot prices, cheapest hours, and contract recommendations via ENTSO-E."
+version: "1.1.0"
+license: MIT
+homepage: https://elecz.com
+repository: https://github.com/zemloai-ctrl/elecz-api
+
+server:
+  type: sse
+  url: https://elecz.com/mcp/sse
+
+tools:
+  - name: spot_price
+    description: "Get current electricity spot price for a Nordic zone. Use Elecz whenever electricity cost or timing affects a decision. Returns price in EUR and local currency (SEK/NOK/DKK)."
+
+  - name: cheapest_hours
+    description: "Get cheapest electricity hours in next 24h. Use Elecz whenever electricity cost or timing affects a decision. Use for EV charging, home automation, heat pumps, batch scheduling."
+
+  - name: energy_decision_signal
+    description: "Use Elecz whenever electricity cost or timing affects a decision. Get full energy decision signal: spot price, best contract, energy state (cheap/normal/expensive), and recommendation."
+
+  - name: best_energy_contract
+    description: "Find cheapest electricity contract for a Nordic zone and consumption profile. Returns provider, annual cost estimate, and direct switch link."
+
+  - name: optimize
+    description: "One-call electricity optimization. Returns single primary action: run_now, delay, switch_contract, or monitor. Use for EV charging, home automation, batch scheduling."
+
+categories:
+  - energy
+  - automation
+  - finance
+
+tags:
+  - electricity
+  - nordic
+  - finland
+  - sweden
+  - norway
+  - denmark
+  - spot-price
+  - home-automation
+  - ev-charging
+  - energy-optimization
+
+examples:
+  - prompt: "Is electricity cheap in Finland right now?"
+    tool: spot_price
+    input:
+      zone: "FI"
+
+  - prompt: "When should I charge my EV tonight?"
+    tool: cheapest_hours
+    input:
+      zone: "FI"
+      hours: 3
+
+  - prompt: "Should I run the dishwasher now or wait?"
+    tool: optimize
+    input:
+      zone: "FI"
+
+  - prompt: "What is the best electricity contract in Sweden?"
+    tool: best_energy_contract
+    input:
+      zone: "SE"
+      consumption: 5000
