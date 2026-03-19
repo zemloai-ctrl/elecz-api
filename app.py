@@ -927,6 +927,11 @@ async def app(scope, receive, send):
                             body["method"] = "ping"
                             message = dict(message)
                             message["body"] = json.dumps(body).encode()
+                        # Force notifications/initialized to have clean empty params
+                        elif method == "notifications/initialized":
+                            body["params"] = {}
+                            message = dict(message)
+                            message["body"] = json.dumps(body).encode()
                         # Clean empty params
                         elif method in ["tools/list", "resources/list", "prompts/list"]:
                             if "params" in body and not body.get("params"):
