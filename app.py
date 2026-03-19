@@ -899,6 +899,11 @@ async def app(scope, receive, send):
                 scope = dict(scope)
                 scope["path"]     = "/mcp/"
                 scope["raw_path"] = b"/mcp/"
+            # Log headers for debugging
+            headers = dict(scope.get("headers", []))
+            ct = headers.get(b"content-type", b"").decode()
+            accept = headers.get(b"accept", b"").decode()
+            logger.info(f"MCP headers: content-type={ct} accept={accept}")
             await mcp_app(scope, receive, send)
             return
     await _starlette(scope, receive, send)
