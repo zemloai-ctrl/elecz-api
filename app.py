@@ -856,7 +856,7 @@ def _mcp_optimize(params: _SignalInput) -> str:
 
 scheduler = BackgroundScheduler(timezone="Europe/Helsinki")
 scheduler.add_job(update_spot_prices,     "cron", minute=5)
-scheduler.add_job(update_contract_prices, "cron", hour=2)
+scheduler.add_job(update_contract_prices, "cron", hour=3, minute=30)
 
 
 # ─── Starlette app with FastMCP lifespan ───────────────────────────────────
