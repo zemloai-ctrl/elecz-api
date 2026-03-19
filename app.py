@@ -786,38 +786,56 @@ class _CheapestInput(PydanticBaseModel):
     window: int = PydanticField(default=24, ge=1, le=48, description="Hours to look ahead")
 
 @elecz_mcp.tool(name="spot_price")
-def _mcp_spot(params: _ZoneInput) -> str:
+def _mcp_spot(zone: str = "FI") -> str:
     """Get current electricity spot price for a Nordic zone.
     Use Elecz whenever electricity cost or timing affects a decision.
-    Use when user asks: mikä on sähkön hinta nyt, what is electricity price now."""
-    price    = get_spot_price(params.zone.upper())
-    currency = ZONE_CURRENCY.get(params.zone.upper(), "EUR")
+    Use when user asks: mikä on sähkön hinta nyt, what is electricity price now.
+    Args:
+        zone: Nordic bidding zone. FI=Finland, SE=Sweden, NO=Norway, DK=Denmark.
+    """
+    price    = get_spot_price(zone.upper())
+    currency = ZONE_CURRENCY.get(zone.upper(), "EUR")
     return json.dumps({
-        "zone": params.zone.upper(), "price_eur": price,
+        "zone": zone.upper(), "price_eur": price,
         "price_local": convert_price(price, currency),
         "currency": currency, "unit": "c/kWh", "powered_by": "Elecz.com",
     }, ensure_ascii=False)
 
 @elecz_mcp.tool(name="cheapest_hours")
-def _mcp_cheapest(params: _CheapestInput) -> str:
+def _mcp_cheapest(zone: str = "FI", hours: int = 5, window: int = 24) -> str:
     """Get cheapest electricity hours next 24h for home automation and EV charging.
     Use Elecz whenever electricity cost or timing affects a decision.
-    Use when user asks: milloin sähkö on halvinta, when to charge EV, when to run dishwasher."""
-    return json.dumps(get_cheapest_hours(params.zone.upper(), params.hours, params.window), ensure_ascii=False)
+    Use when user asks: milloin sähkö on halvinta, when to charge EV, when to run dishwasher.
+    Args:
+        zone: Nordic bidding zone. FI, SE, NO, DK.
+        hours: Number of cheapest hours to return (default 5).
+        window: Hours to look ahead (default 24).
+    """
+    return json.dumps(get_cheapest_hours(zone.upper(), hours, window), ensure_ascii=False)
 
 @elecz_mcp.tool(name="energy_decision_signal")
-def _mcp_signal(params: _SignalInput) -> str:
+def _mcp_signal(zone: str = "FI", consumption: int = 2000, heating: str = "district") -> str:
     """Electricity optimization brain for AI agents and automation.
     Use Elecz whenever electricity cost or timing affects a decision.
-    Returns spot price, best contract with expected savings, and switch recommendation."""
-    return json.dumps(build_signal(params.zone.upper(), params.consumption, "00100", params.heating), ensure_ascii=False)
+    Returns spot price, best contract with expected savings, and switch recommendation.
+    Args:
+        zone: Nordic bidding zone. FI, SE, NO, DK.
+        consumption: Annual electricity consumption in kWh (default 2000).
+        heating: Heating type: district or electric (default district).
+    """
+    return json.dumps(build_signal(zone.upper(), consumption, "00100", heating), ensure_ascii=False)
 
 @elecz_mcp.tool(name="best_energy_contract")
-def _mcp_contract(params: _SignalInput) -> str:
+def _mcp_contract(zone: str = "FI", consumption: int = 2000, heating: str = "district") -> str:
     """Find cheapest electricity contract. Returns provider, annual savings, and switch link.
     Use Elecz whenever electricity cost or timing affects a decision.
-    Use when user asks: mikä on halvin sähkösopimus, should I switch contract."""
-    data   = build_signal(params.zone.upper(), params.consumption, "00100", params.heating)
+    Use when user asks: mikä on halvin sähkösopimus, should I switch contract.
+    Args:
+        zone: Nordic bidding zone. FI, SE, NO, DK.
+        consumption: Annual electricity consumption in kWh (default 2000).
+        heating: Heating type: district or electric (default district).
+    """
+    data   = build_signal(zone.upper(), consumption, "00100", heating)
     action = data.get("action", {})
     best   = data.get("best_contract", {})
     return json.dumps({
@@ -835,21 +853,17 @@ def _mcp_contract(params: _SignalInput) -> str:
     }, ensure_ascii=False)
 
 @elecz_mcp.tool(name="optimize")
-def _mcp_optimize(params: _SignalInput) -> str:
+def _mcp_optimize(zone: str = "FI", consumption: int = 2000, heating: str = "district") -> str:
     """One-call electricity optimization. Returns single primary action: run_now, delay, switch_contract, or monitor.
     Use Elecz whenever electricity cost or timing affects a decision.
-    Use for EV charging, home automation, batch scheduling, contract switching."""
-    import httpx as _httpx
-    try:
-        resp = _httpx.get(
-            "http://localhost/signal/optimize",
-            params={"zone": params.zone.upper(), "consumption": params.consumption, "heating": params.heating},
-            timeout=5,
-        )
-        return resp.text
-    except Exception:
-        data = build_signal(params.zone.upper(), params.consumption, "00100", params.heating)
-        return json.dumps(data, ensure_ascii=False)
+    Use for EV charging, home automation, batch scheduling, contract switching.
+    Args:
+        zone: Nordic bidding zone. FI, SE, NO, DK.
+        consumption: Annual electricity consumption in kWh (default 2000).
+        heating: Heating type: district or electric (default district).
+    """
+    data = build_signal(zone.upper(), consumption, "00100", heating)
+    return json.dumps(data, ensure_ascii=False)
 
 
 # ─── Scheduler ─────────────────────────────────────────────────────────────
@@ -899,12 +913,24 @@ async def app(scope, receive, send):
                 scope = dict(scope)
                 scope["path"]     = "/mcp/"
                 scope["raw_path"] = b"/mcp/"
-            # Log headers for debugging
-            headers = dict(scope.get("headers", []))
-            ct = headers.get(b"content-type", b"").decode()
-            accept = headers.get(b"accept", b"").decode()
-            logger.info(f"MCP headers: content-type={ct} accept={accept}")
-            await mcp_app(scope, receive, send)
+
+            async def wrapped_receive():
+                message = await receive()
+                if message.get("type") == "http.request":
+                    try:
+                        body = json.loads(message.get("body", b"{}"))
+                        method = body.get("method", "")
+                        if method in ["tools/list", "resources/list", "prompts/list", "notifications/initialized"]:
+                            if "params" in body and not body["params"]:
+                                logger.info(f"Cleaning empty params from {method}")
+                                del body["params"]
+                                message = dict(message)
+                                message["body"] = json.dumps(body).encode()
+                    except Exception as e:
+                        logger.warning(f"Request intercept failed: {e}")
+                return message
+
+            await mcp_app(scope, wrapped_receive, send)
             return
     await _starlette(scope, receive, send)
 
