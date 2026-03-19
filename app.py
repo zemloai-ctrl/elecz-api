@@ -920,9 +920,16 @@ async def app(scope, receive, send):
                     try:
                         body = json.loads(message.get("body", b"{}"))
                         method = body.get("method", "")
-                        if method in ["tools/list", "resources/list", "prompts/list", "notifications/initialized"]:
-                            if "params" in body and not body["params"]:
-                                logger.info(f"Cleaning empty params from {method}")
+                        logger.info(f"MCP method: {method}")
+                        # Silence Smithery-specific methods FastMCP doesn't know
+                        if "ai.smithery" in method:
+                            logger.info(f"Remapping Smithery method {method} → ping")
+                            body["method"] = "ping"
+                            message = dict(message)
+                            message["body"] = json.dumps(body).encode()
+                        # Clean empty params
+                        elif method in ["tools/list", "resources/list", "prompts/list"]:
+                            if "params" in body and not body.get("params"):
                                 del body["params"]
                                 message = dict(message)
                                 message["body"] = json.dumps(body).encode()
