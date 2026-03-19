@@ -894,7 +894,11 @@ async def app(scope, receive, send):
         method = scope.get("method", "")
         logger.info(f"ASGI: {method} {path}")
         if path.startswith("/mcp"):
-            # Pass to FastMCP directly — keep full path, let FastMCP handle it
+            # Normalize /mcp → /mcp/ to avoid internal redirect
+            if path == "/mcp":
+                scope = dict(scope)
+                scope["path"]     = "/mcp/"
+                scope["raw_path"] = b"/mcp/"
             await mcp_app(scope, receive, send)
             return
     await _starlette(scope, receive, send)
