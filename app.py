@@ -385,6 +385,8 @@ Return ONLY a valid JSON object with no markdown, no explanation:
         response = gemini_model.generate_content(prompt)
         text     = response.text.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
         data     = json.loads(text)
+        # Always override scraped_at with current time — never trust Gemini's timestamp
+        data["scraped_at"] = now_iso
         logger.info(f"  ✓ {zone}/{provider}")
         return data
     except Exception as e:
@@ -403,6 +405,7 @@ def update_contract_prices():
                         **data,
                         "direct_url":    PROVIDER_DIRECT_URLS.get(zone, {}).get(provider),
                         "affiliate_url": None,
+                        "scraped_at":    datetime.now(timezone.utc).isoformat(),
                         "updated_at":    datetime.now(timezone.utc).isoformat(),
                     }, on_conflict="provider,zone").execute()
                     logger.info(f"  ✓ {zone}/{provider}")
