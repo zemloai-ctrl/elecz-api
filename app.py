@@ -883,21 +883,24 @@ routes = [
     Route("/favicon.ico",                       route_favicon),
     Route("/favicon.svg",                       route_favicon),
     Route("/.well-known/mcp/server-card.json",  route_server_card),
-    Mount("/mcp",                               app=mcp_app),
 ]
 
 _starlette = Starlette(routes=routes, lifespan=lifespan)
 
 async def app(scope, receive, send):
-    """ASGI wrapper — normalize /mcp* paths so Mount works without redirect."""
+    """Route /mcp* directly to FastMCP, everything else to Starlette."""
     if scope.get("type") == "http":
-        path = scope.get("path", "")
+        path   = scope.get("path", "")
         method = scope.get("method", "")
         logger.info(f"ASGI: {method} {path}")
-        if path == "/mcp" or path == "/mcp/":
+        if path.startswith("/mcp"):
+            # Strip /mcp prefix and pass to FastMCP directly
+            new_path = path[4:] or "/"
             scope = dict(scope)
-            scope["path"]     = "/mcp/"
-            scope["raw_path"] = b"/mcp/"
+            scope["path"]     = new_path
+            scope["raw_path"] = new_path.encode()
+            await mcp_app(scope, receive, send)
+            return
     await _starlette(scope, receive, send)
 
 if __name__ == "__main__":
