@@ -375,21 +375,10 @@ Return ONLY a valid JSON object with no markdown, no explanation:
 }}
 """
     try:
-        from google.generativeai import types as genai_types
-        search_tool = genai_types.Tool(google_search_retrieval=genai_types.GoogleSearchRetrieval())
-        response    = gemini_model.generate_content(prompt, tools=[search_tool])
-        text        = response.text.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
-        data        = json.loads(text)
-        logger.info(f"  [grounded] {zone}/{provider}")
-        return data
-    except Exception as e:
-        logger.warning(f"  Grounding failed {zone}/{provider}: {e} — trying plain Gemini")
-
-    try:
         response = gemini_model.generate_content(prompt)
         text     = response.text.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
         data     = json.loads(text)
-        logger.info(f"  [fallback] {zone}/{provider}")
+        logger.info(f"  ✓ {zone}/{provider}")
         return data
     except Exception as e:
         logger.error(f"  Scrape failed {zone}/{provider}: {e}")
@@ -408,7 +397,7 @@ def update_contract_prices():
                         "direct_url":    PROVIDER_DIRECT_URLS.get(zone, {}).get(provider),
                         "affiliate_url": None,
                         "updated_at":    datetime.now(timezone.utc).isoformat(),
-                    }).execute()
+                    }, on_conflict="provider,zone").execute()
                     logger.info(f"  ✓ {zone}/{provider}")
                 except Exception as e:
                     logger.error(f"  ✗ {zone}/{provider}: {e}")
@@ -900,11 +889,15 @@ routes = [
 _starlette = Starlette(routes=routes, lifespan=lifespan)
 
 async def app(scope, receive, send):
-    """ASGI wrapper — normalize /mcp to /mcp/ so Mount works without redirect."""
-    if scope.get("type") == "http" and scope.get("path") == "/mcp":
-        scope = dict(scope)
-        scope["path"]     = "/mcp/"
-        scope["raw_path"] = b"/mcp/"
+    """ASGI wrapper — normalize /mcp* paths so Mount works without redirect."""
+    if scope.get("type") == "http":
+        path = scope.get("path", "")
+        method = scope.get("method", "")
+        logger.info(f"ASGI: {method} {path}")
+        if path == "/mcp" or path == "/mcp/":
+            scope = dict(scope)
+            scope["path"]     = "/mcp/"
+            scope["raw_path"] = b"/mcp/"
     await _starlette(scope, receive, send)
 
 if __name__ == "__main__":
