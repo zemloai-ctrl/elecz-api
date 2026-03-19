@@ -744,6 +744,15 @@ async def route_favicon(request: Request):
     return Response(svg, media_type="image/svg+xml")
 
 
+async def route_glama_ownership(request: Request):
+    return JSONResponse({
+        "$schema": "https://glama.ai/mcp/schemas/connector.json",
+        "maintainers": [
+            {"email": "sakke@zemloai.com"}
+        ]
+    })
+
+
 async def route_server_card(request: Request):
     return JSONResponse({
         "name":        "elecz",
@@ -897,6 +906,7 @@ routes = [
     Route("/favicon.ico",                       route_favicon),
     Route("/favicon.svg",                       route_favicon),
     Route("/.well-known/mcp/server-card.json",  route_server_card),
+    Route("/.well-known/glama.json",             route_glama_ownership),
 ]
 
 _starlette = Starlette(routes=routes, lifespan=lifespan)
