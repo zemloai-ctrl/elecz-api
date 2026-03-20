@@ -163,6 +163,19 @@ gemini_model = genai.GenerativeModel("gemini-2.5-flash")
 ENTSOE_TOKEN = os.environ["ENTSOE_SECURITY_TOKEN"]
 
 
+# ─── Analytics ────────────────────────────────────────────────────────────────
+
+def log_mcp_call(tool_name: str, zone: str = None):
+    try:
+        supabase.table("mcp_calls").insert({
+            "tool_name": tool_name,
+            "zone":      zone,
+            "called_at": datetime.now(timezone.utc).isoformat(),
+        }).execute()
+    except Exception as e:
+        logger.warning(f"Analytics failed: {e}")
+
+
 # ─── ENTSO-E helpers ───────────────────────────────────────────────────────
 
 def _parse_entsoe_xml(xml_text: str) -> list[dict]:
@@ -816,6 +829,7 @@ def _mcp_spot(zone: str = "FI") -> str:
     Args:
         zone: Nordic bidding zone. FI=Finland, SE=Sweden, NO=Norway, DK=Denmark.
     """
+    log_mcp_call("spot_price", zone.upper())
     price    = get_spot_price(zone.upper())
     currency = ZONE_CURRENCY.get(zone.upper(), "EUR")
     return json.dumps({
@@ -834,6 +848,7 @@ def _mcp_cheapest(zone: str = "FI", hours: int = 5, window: int = 24) -> str:
         hours: Number of cheapest hours to return (default 5).
         window: Hours to look ahead (default 24).
     """
+    log_mcp_call("cheapest_hours", zone.upper())
     return json.dumps(get_cheapest_hours(zone.upper(), hours, window), ensure_ascii=False)
 
 @elecz_mcp.tool(name="energy_decision_signal")
@@ -846,6 +861,7 @@ def _mcp_signal(zone: str = "FI", consumption: int = 2000, heating: str = "distr
         consumption: Annual electricity consumption in kWh (default 2000).
         heating: Heating type: district or electric (default district).
     """
+    log_mcp_call("energy_decision_signal", zone.upper())
     return json.dumps(build_signal(zone.upper(), consumption, "00100", heating), ensure_ascii=False)
 
 @elecz_mcp.tool(name="best_energy_contract")
@@ -858,6 +874,7 @@ def _mcp_contract(zone: str = "FI", consumption: int = 2000, heating: str = "dis
         consumption: Annual electricity consumption in kWh (default 2000).
         heating: Heating type: district or electric (default district).
     """
+    log_mcp_call("best_energy_contract", zone.upper())
     data   = build_signal(zone.upper(), consumption, "00100", heating)
     action = data.get("action", {})
     best   = data.get("best_contract", {})
@@ -885,6 +902,7 @@ def _mcp_optimize(zone: str = "FI", consumption: int = 2000, heating: str = "dis
         consumption: Annual electricity consumption in kWh (default 2000).
         heating: Heating type: district or electric (default district).
     """
+    log_mcp_call("optimize", zone.upper())
     data = build_signal(zone.upper(), consumption, "00100", heating)
     return json.dumps(data, ensure_ascii=False)
 
