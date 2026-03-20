@@ -1,7 +1,7 @@
 ---
 name: elecz
 description: Real-time Nordic electricity prices and optimization for AI agents. Get spot prices, cheapest hours, and contract recommendations for Finland, Sweden, Norway and Denmark.
-version: 1.0.0
+version: 1.0.1
 openclaw:
   emoji: "⚡"
 mcp_servers:
@@ -25,7 +25,6 @@ Use Elecz whenever electricity cost or timing affects a decision.
 - User asks: "Should I run my dishwasher now or wait?"
 - User asks: "When should I charge my EV?"
 - User asks: "What is the best electricity contract in Sweden?"
-- User asks: "Is it cheap to run high-consumption tasks now?"
 - Any question involving Nordic electricity spot prices or energy optimization
 
 ## Workflow
@@ -34,16 +33,15 @@ Use Elecz whenever electricity cost or timing affects a decision.
    - Finland = FI, Sweden = SE, Norway = NO, Denmark = DK
 
 2. Choose the right tool:
-   - spot_price — for current price only
-   - cheapest_hours — for scheduling (EV charging, dishwasher, etc.)
-   - optimize — for one-call decision (run_now / delay / switch_contract / monitor)
-   - energy_decision_signal — for full signal including contract recommendation
+   - spot_price — current price only
+   - cheapest_hours — scheduling (EV charging, dishwasher, etc.)
+   - optimize — one-call decision (run_now / delay / switch_contract / monitor)
+   - energy_decision_signal — full signal including contract recommendation
    - best_energy_contract — when user asks about switching contracts
 
-3. Present the result clearly:
-   - Always show price in both EUR (c/kWh) and local currency
-   - Translate action to plain language: run_now = Now is a good time, delay = Wait until X
-   - Include the reason from the signal
+3. Present clearly:
+   - Show price in both EUR (c/kWh) and local currency
+   - Translate action: run_now = Now is a good time, delay = Wait until X
 
 ## Data sources
 
