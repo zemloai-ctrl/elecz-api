@@ -533,7 +533,7 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
     savings_local_year = round(savings_eur_year * fx, 2) if savings_eur_year else None
     savings_currency = currency
 
-    should_switch = savings_eur_year and savings_eur_year > 50
+    should_switch = bool(savings_eur_year and savings_eur_year > 0)
 
     return {
         "signal": "elecz",
@@ -777,7 +777,10 @@ async def route_signal_optimize(request: Request):
     if action.get("status") == "switch_now" and savings_eur:
         primary_action = "switch_contract"
         provider = sig.get("best_contract", {}).get("provider") if sig.get("best_contract") else None
-        savings_display = f"{savings_local} {savings_currency}" if savings_local and savings_currency != "EUR" else f"{savings_eur} EUR"
+        if savings_local and savings_currency and savings_currency != "EUR":
+            savings_display = f"{savings_local} {savings_currency}"
+        else:
+            savings_display = f"{savings_eur} EUR"
         reason = f"Save {savings_display}/year by switching to {provider}"
     elif state == "cheap":
         primary_action = "run_now"
