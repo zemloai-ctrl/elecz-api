@@ -734,11 +734,13 @@ async def route_signal(request: Request):
     heating = request.query_params.get("heating", "district")
     if zone not in ZONES:
         return JSONResponse({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}, status_code=400)
+    log_mcp_call("rest:signal", zone)
     return JSONResponse(build_signal(zone, consumption, postcode, heating))
 
 
 async def route_signal_spot(request: Request):
     zone = request.query_params.get("zone", "FI").upper()
+    log_mcp_call("rest:spot", zone)
     price = get_spot_price(zone)
     currency = ZONE_CURRENCY.get(zone, "EUR")
     unit_local = ZONE_UNIT_LOCAL.get(currency, "c/kWh")
@@ -761,6 +763,7 @@ async def route_signal_optimize(request: Request):
     heating = request.query_params.get("heating", "district")
     if zone not in ZONES:
         return JSONResponse({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}, status_code=400)
+    log_mcp_call("rest:optimize", zone)
 
     sig = build_signal(zone, consumption, "00100", heating)
     cheapest = get_cheapest_hours(zone, 3, 24)
@@ -826,6 +829,7 @@ async def route_signal_cheapest_hours(request: Request):
     window = int(request.query_params.get("window", 24))
     if zone not in ZONES:
         return JSONResponse({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}, status_code=400)
+    log_mcp_call("rest:cheapest_hours", zone)
     return JSONResponse(get_cheapest_hours(zone, hours, window))
 
 
