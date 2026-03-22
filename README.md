@@ -1,18 +1,28 @@
-# ⚡ Elecz — Electricity Pricing API for AI Agents
+# ⚡ Elecz — Energy Decision Signal for AI Agents
 
-Elecz is an MCP-compatible electricity pricing and decision signal API.
-
-Get spot prices, cheapest hours, and contract recommendations in one unified schema.
+Real-time Nordic electricity prices, cheapest hours, and contract recommendations — in one API call.
 
 ```
-GET https://elecz.com/signal?zone=FI
+GET https://elecz.com/signal/optimize?zone=FI
 ```
 
-Built for AI agents (MCP, LangChain, OpenAI tools, Claude, Home Assistant).
+**No API key. No authentication. One line to integrate.**
 
 ---
 
-## ⚡ Quickstart — Add Elecz to your agent
+## Why Elecz?
+
+Electricity prices in the Nordic market change every hour. For AI agents, home automation, EV charging, and batch workloads — *when* you consume energy matters as much as *how much* you consume.
+
+Elecz turns complex ENTSO-E market data into a single actionable signal:
+
+> *"Run now. Electricity is cheap."*
+> *"Wait until 03:00. Best 3-hour window starts then."*
+> *"Switch to Tibber. Save 516 NOK/year."*
+
+---
+
+## Quickstart — Add to your agent
 
 ```json
 {
@@ -24,104 +34,99 @@ Built for AI agents (MCP, LangChain, OpenAI tools, Claude, Home Assistant).
 }
 ```
 
-Your agent now understands spot prices, cheapest hours, best window, energy state and contract decisions — for Finland, Sweden, Norway and Denmark.
-
-No authentication required. No API key. Just connect and use.
+Your agent now understands Nordic spot prices, cheapest hours, energy state, and contract decisions — for Finland, Sweden, Norway, and Denmark.
 
 ---
 
-## 🚀 Why Elecz?
+## What Elecz delivers
 
-Modern agents optimize for time, energy, and cost.
-The energy market is complex - the signal should not be.
-
-Elecz delivers:
-
-- Real-time spot price (ENTSO-E, updated hourly)
-- Cheapest hours next 24h
-- Best 3h consecutive window
-- Energy state: cheap / normal / expensive
-- One-call optimization decision with savings estimate
-- Contract recommendation (Nordic markets)
-- Prices in EUR and local currency (EUR / SEK / NOK / DKK)
-- MCP-ready - one line to integrate
-- No authentication required
+- **Real-time spot price** — ENTSO-E day-ahead data, updated hourly
+- **Cheapest hours next 24h** — sorted list + best 3-hour consecutive window
+- **Energy state** — `cheap` / `normal` / `expensive` with confidence score
+- **One-call optimization** — `run_now`, `delay`, `switch_contract`, or `monitor`
+- **Contract recommendation** — best provider for your consumption profile
+- **Savings in local currency** — NOK for Norway, SEK for Sweden, DKK for Denmark, EUR for Finland
+- **MCP-native** — one line to connect, works with Claude, ChatGPT, LangChain, Home Assistant
 
 ---
 
-## 📡 API Endpoints
+## API Endpoints
 
-### One-call optimization (recommended)
-```
-GET https://elecz.com/signal/optimize?zone=FI
-```
+| Endpoint | Description |
+|---|---|
+| `GET /signal/optimize?zone=FI` | One-call optimization — recommended |
+| `GET /signal?zone=FI` | Full energy decision signal |
+| `GET /signal/spot?zone=FI` | Current spot price only |
+| `GET /signal/cheapest-hours?zone=FI&hours=5` | Cheapest hours next 24h |
+| `GET /health` | Health check |
 
-### Full energy decision signal
-```
-GET https://elecz.com/signal?zone=FI
-```
-
-### Spot price only
-```
-GET https://elecz.com/signal/spot?zone=FI
-```
-
-### Cheapest hours (next 24h)
-```
-GET https://elecz.com/signal/cheapest-hours?zone=FI&hours=5
-```
-
-### Health check
-```
-GET https://elecz.com/health
-```
-
-### Supported zones
-FI, SE, SE1, SE2, SE3, SE4, NO, NO1, NO2, NO3, NO4, NO5, DK, DK1, DK2
+**Supported zones:** FI, SE, SE1–SE4, NO, NO1–NO5, DK, DK1–DK2
 
 ---
 
-## 🧠 Signal Schema
+## Signal Schema
 
-### /signal/optimize
+### /signal/optimize — one-call decision
+
 ```json
 {
   "signal": "elecz_optimize",
-  "zone": "FI",
-  "timestamp": "2026-03-20T01:00:00Z",
+  "zone": "NO",
+  "timestamp": "2026-03-22T19:14:13Z",
   "decision": {
-    "action": "run_now",
+    "action": "switch_contract",
     "until": null,
-    "reason": "Electricity is cheap now",
+    "reason": "Save 516.71 NOK/year by switching to tibber",
     "savings_eur": null
   },
-  "energy_state": "cheap",
-  "spot_price_eur": 0.55,
+  "energy_state": "expensive",
+  "spot_price_eur": 10.86,
+  "best_window": {
+    "start": "2026-03-22T20:00",
+    "end": "2026-03-22T22:00",
+    "avg_price_eur": 10.93
+  },
+  "contract_switch": {
+    "recommended": true,
+    "provider": "tibber",
+    "expected_savings_eur_year": 46.85,
+    "expected_savings_local_year": 516.71,
+    "savings_currency": "NOK",
+    "link": "https://elecz.com/go/tibber"
+  },
   "confidence": 0.95,
   "powered_by": "Elecz.com"
 }
 ```
 
-### /signal/spot
+**Action values:**
+- `run_now` — electricity is cheap, act now
+- `delay` — expensive now, wait for best window
+- `switch_contract` — savings available by switching provider
+- `monitor` — normal pricing, no action needed
+
+### /signal/spot — current price
+
 ```json
 {
   "signal": "elecz_spot",
   "zone": "SE",
   "currency": "SEK",
-  "price_eur": 10.3,
+  "price_eur": 3.43,
   "unit_eur": "c/kWh",
-  "price_local": 111.01,
+  "price_local": 36.99,
   "unit_local": "ore/kWh",
-  "timestamp": "2026-03-20T01:00:00Z",
+  "timestamp": "2026-03-22T19:00:00Z",
   "powered_by": "Elecz.com"
 }
 ```
 
 ---
 
-## 🧩 Examples
+## Examples
 
-### Claude Desktop
+### Claude Desktop / Claude Code
+
 ```json
 {
   "mcpServers": {
@@ -132,7 +137,8 @@ FI, SE, SE1, SE2, SE3, SE4, NO, NO1, NO2, NO3, NO4, NO5, DK, DK1, DK2
 }
 ```
 
-### Python
+### Python — schedule batch jobs by price
+
 ```python
 import httpx
 
@@ -143,31 +149,59 @@ if decision["action"] == "run_now":
     run_batch_job()
 elif decision["action"] == "delay":
     print(f"Wait until {decision['until']}")
+elif decision["action"] == "switch_contract":
+    print(decision["reason"])  # "Save 47 EUR/year by switching to helen"
+```
+
+### Home Assistant — automate EV charging
+
+```python
+signal = httpx.get("https://elecz.com/signal/cheapest-hours?zone=FI&hours=3").json()
+best_window = signal["best_3h_window"]
+# → {"start": "2026-03-23T03:00", "end": "2026-03-23T05:00", "avg_price_eur": 0.27}
 ```
 
 ---
 
-## 🔒 Data Sources
+## MCP Tools
 
-- ENTSO-E - day-ahead spot prices, updated hourly
-- Frankfurter API - EUR to SEK / NOK / DKK conversion
-- Redis - real-time caching
-- Supabase - historical price storage and contract data
-
----
-
-## 🌍 Roadmap
-
-- Q2 2026: EU expansion (DE, UK)
-- Q3 2026: Device-level integrations (EV, heat pumps)
-- Q4 2026: Affiliate contract switching
+| Tool | Description |
+|---|---|
+| `spot_price` | Current spot price for a Nordic zone |
+| `cheapest_hours` | Cheapest hours next 24h + best window |
+| `energy_decision_signal` | Full signal: price, contract, state, recommendation |
+| `best_energy_contract` | Best contract for your consumption profile |
+| `optimize` | One-call decision: run_now / delay / switch_contract / monitor |
 
 ---
 
-## 📜 License
+## Data Sources
+
+- **ENTSO-E** — day-ahead spot prices, updated hourly
+- **Frankfurter API** — EUR → SEK / NOK / DKK conversion
+- **Redis** — real-time caching
+- **Supabase** — historical price storage and contract data
+
+---
+
+## Privacy
+
+Elecz logs API endpoint, zone, timestamp, and IP address for monitoring purposes. No personal data is collected or sold. See [elecz.com/privacy](https://elecz.com/privacy).
+
+---
+
+## Roadmap
+
+- Q2 2026: EU expansion (DE, FR, UK)
+- Q3 2026: Device-level integrations (EV, heat pumps, boilers)
+- Q4 2026: Contract switching with affiliate partnerships
+
+---
+
+## License
 
 MIT
 
 ---
 
-Elecz.com - Electricity Pricing API for AI Agents - Powered by ENTSO-E - Nordic markets
+Maintained by [Sakari Korkia-Aho / Zemlo AI](mailto:sakke@zemloai.com) · [elecz.com](https://elecz.com) · Powered by ENTSO-E · Nordic markets
