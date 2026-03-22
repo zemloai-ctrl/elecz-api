@@ -653,7 +653,7 @@ async def route_index(request: Request):
 
   <p style="color:#333; margin-top:60px; font-size:0.8em;">
     ⚡ Elecz.com — Energy Decision Signal API · Powered by ENTSO-E · Nordic markets<br>
-    Maintained by <a href="mailto:sakari.korkia-aho@zemloai.com">Sakari Korkia-Aho / Zemlo AI</a> ·
+    Maintained by <a href="mailto:sakke@zemloai.com">Sakari Korkia-Aho / Zemlo AI</a> ·
     <a href="/privacy">Privacy Policy</a>
   </p>
 </body>
@@ -683,7 +683,7 @@ async def route_privacy(request: Request):
 
   <h2>Who we are</h2>
   <p>Elecz is operated by Sakari Korkia-Aho / Zemlo AI, Kokkola, Finland.<br>
-  Contact: <a href="mailto:sakari.korkia-aho@zemloai.com">sakari.korkia-aho@zemloai.com</a></p>
+  Contact: <a href="mailto:sakke@zemloai.com">sakke@zemloai.com</a></p>
 
   <h2>What data we collect</h2>
   <p>When you use the Elecz API or MCP server, we may log the following:</p>
@@ -716,7 +716,7 @@ async def route_privacy(request: Request):
   the privacy practices of those sites.</p>
 
   <h2>Contact</h2>
-  <p>Questions about privacy: <a href="mailto:sakari.korkia-aho@zemloai.com">sakari.korkia-aho@zemloai.com</a></p>
+  <p>Questions about privacy: <a href="mailto:sakke@zemloai.com">sakke@zemloai.com</a></p>
 
   <p style="margin-top:60px; color:#555; font-size:0.8em;">
     ⚡ Elecz.com · Zemlo AI · Kokkola, Finland ·
@@ -867,7 +867,7 @@ async def route_glama_ownership(request: Request):
     return JSONResponse({
         "$schema": "https://glama.ai/mcp/schemas/connector.json",
         "maintainers": [
-            {"email": "sakari.korkia-aho@zemloai.com"}
+            {"email": "sakke@zemloai.com"}
         ]
     })
 
