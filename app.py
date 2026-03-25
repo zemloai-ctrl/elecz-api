@@ -249,6 +249,15 @@ def get_spot_price(zone: str = "FI") -> Optional[float]:
     return None
 
 def save_day_ahead_to_supabase(zone: str, rows: list[dict]):
+    # Deduplicate by hour to avoid ON CONFLICT errors when ENTSO-E returns duplicate rows
+    seen = set()
+    unique_rows = []
+    for r in rows:
+        key = r["hour"].isoformat()
+        if key not in seen:
+            seen.add(key)
+            unique_rows.append(r)
+
     records = [
         {
             "zone": zone,
@@ -258,7 +267,7 @@ def save_day_ahead_to_supabase(zone: str, rows: list[dict]):
             "source": "ENTSO-E",
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
-        for r in rows
+        for r in unique_rows
     ]
     if records:
         try:
@@ -1121,7 +1130,10 @@ async def app(scope, receive, send):
                 message = await receive()
                 if message.get("type") == "http.request":
                     try:
-                        body = json.loads(message.get("body", b"{}"))
+                        body_bytes = message.get("body", b"")
+                        if not body_bytes:
+                            return message
+                        body = json.loads(body_bytes)
                         method = body.get("method", "")
                         logger.info(f"MCP method: {method}")
                         if "ai.smithery" in method:
