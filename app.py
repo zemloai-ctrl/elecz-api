@@ -518,14 +518,11 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
 
     best_annual = best.get("annual_cost_estimate") if best else None
 
-    margins = [c.get("spot_margin_ckwh") for c in contracts if c.get("spot_margin_ckwh") is not None]
-    fees = [c.get("basic_fee_eur_month") for c in contracts if c.get("basic_fee_eur_month") is not None]
-    avg_margin = sum(margins) / len(margins) if margins else 0.5
-    avg_fee = sum(fees) / len(fees) if fees else 5.0
-
-    if spot and best_annual:
-        reference_annual = ((spot + avg_margin) / 100) * consumption + avg_fee * 12
-        savings_eur_year = round(reference_annual - best_annual, 2) if reference_annual > best_annual else None
+    # Savings: difference between most expensive and cheapest listed contract
+    if best_annual:
+        worst = ranked[-1] if ranked else None
+        worst_annual = worst.get("annual_cost_estimate") if worst else None
+        savings_eur_year = round(worst_annual - best_annual, 2) if worst_annual and worst_annual > best_annual else None
     else:
         savings_eur_year = None
 
@@ -751,7 +748,7 @@ async def route_privacy(request: Request):
 
 async def route_signal(request: Request):
     zone = request.query_params.get("zone", "FI").upper()
-    consumption = int(request.query_params.get("consumption", 2000))
+    consumption = int(request.query_params.get("consumption", 10000))
     postcode = request.query_params.get("postcode", "00100")
     heating = request.query_params.get("heating", "district")
     if zone not in ZONES:
@@ -783,7 +780,7 @@ async def route_signal_spot(request: Request):
 
 async def route_signal_optimize(request: Request):
     zone = request.query_params.get("zone", "FI").upper()
-    consumption = int(request.query_params.get("consumption", 2000))
+    consumption = int(request.query_params.get("consumption", 10000))
     heating = request.query_params.get("heating", "district")
     if zone not in ZONES:
         return JSONResponse({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}, status_code=400)
@@ -888,6 +885,10 @@ async def route_health(request: Request):
     return JSONResponse({"status": "ok", "service": "elecz", "version": "2.1"})
 
 
+async def route_robots(request: Request):
+    return Response("User-agent: *\nAllow: /\n", media_type="text/plain")
+
+
 async def route_favicon(request: Request):
     svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
 <rect width="32" height="32" rx="6" fill="#0a0a0a"/>
@@ -940,7 +941,7 @@ class _ZoneInput(PydanticBaseModel):
 class _SignalInput(PydanticBaseModel):
     model_config = PydanticConfigDict(str_strip_whitespace=True, extra="forbid")
     zone: str = PydanticField(default="FI", description="Nordic bidding zone: FI, SE, NO, DK")
-    consumption: int = PydanticField(default=2000, ge=100, le=100000, description="Annual electricity consumption in kWh. Typical apartment: 1500-2000 kWh, house with electric heating: 15000-20000 kWh.")
+    consumption: int = PydanticField(default=10000, ge=100, le=100000, description="Annual electricity consumption in kWh. Typical apartment: 1500-2000 kWh, house with electric heating: 15000-20000 kWh.")
     heating: str = PydanticField(default="district", description="Heating type: district or electric")
 
 
@@ -1093,6 +1094,7 @@ routes = [
     Route("/signal/cheapest-hours", route_signal_cheapest_hours),
     Route("/go/{provider}", route_go),
     Route("/health", route_health),
+    Route("/robots.txt", route_robots),
     Route("/favicon.ico", route_favicon),
     Route("/favicon.svg", route_favicon),
     Route("/.well-known/mcp/server-card.json", route_server_card),
