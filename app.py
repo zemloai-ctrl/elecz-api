@@ -169,11 +169,13 @@ ENTSOE_TOKEN = os.environ["ENTSOE_SECURITY_TOKEN"]
 
 # ─── Analytics ─────────────────────────────────────────────────────────────
 
-def log_mcp_call(tool_name: str, zone: str = None):
+def log_mcp_call(tool_name: str, zone: str = None, user_agent: str = None):
+    """Log API and MCP tool calls with optional user-agent for caller identification."""
     try:
         supabase.table("mcp_calls").insert({
             "tool_name": tool_name,
             "zone": zone,
+            "user_agent": user_agent,
             "called_at": datetime.now(timezone.utc).isoformat(),
         }).execute()
     except Exception as e:
@@ -312,7 +314,6 @@ def get_cheapest_hours(zone: str, n_hours: int = 5, window_h: int = 24) -> dict:
     all_prices = [r["price_ckwh"] for r in rows]
     avg = sum(all_prices) / len(all_prices) if all_prices else 0
 
-    # Fetch rows in chronological order for best window calculation
     try:
         result_chrono = supabase.table("prices_day_ahead").select(
             "hour, price_ckwh"
@@ -517,7 +518,6 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
 
     best_annual = best.get("annual_cost_estimate") if best else None
 
-    # Realistic savings: compare best contract vs market average (avg margin + avg fee)
     margins = [c.get("spot_margin_ckwh") for c in contracts if c.get("spot_margin_ckwh") is not None]
     fees = [c.get("basic_fee_eur_month") for c in contracts if c.get("basic_fee_eur_month") is not None]
     avg_margin = sum(margins) / len(margins) if margins else 0.5
@@ -529,10 +529,8 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
     else:
         savings_eur_year = None
 
-    # Convert savings to local currency
     savings_local_year = round(savings_eur_year * fx, 2) if savings_eur_year else None
     savings_currency = currency
-
     should_switch = bool(savings_eur_year and savings_eur_year > 0)
 
     return {
@@ -597,12 +595,36 @@ async def route_index(request: Request):
         for label, price, currency in zones_display
     )
 
+    json_ld = json.dumps({
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Elecz",
+        "description": "Real-time Nordic electricity price signal API for AI agents. Returns spot prices, cheapest hours, and contract recommendations for Finland, Sweden, Norway and Denmark.",
+        "url": "https://elecz.com",
+        "applicationCategory": "Utilities",
+        "operatingSystem": "Any",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "EUR"
+        },
+        "provider": {
+            "@type": "Organization",
+            "name": "Zemlo AI",
+            "url": "https://zemloai.com"
+        }
+    }, indent=2)
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>⚡ Elecz.com — Energy Signal API</title>
+  <meta name="description" content="Real-time Nordic electricity price signal API for AI agents. Spot prices, cheapest hours, and contract recommendations for Finland, Sweden, Norway and Denmark.">
+  <script type="application/ld+json">
+{json_ld}
+  </script>
   <style>
     body {{ font-family: monospace; background: #0a0a0a; color: #e0e0e0; max-width: 800px; margin: 40px auto; padding: 20px; }}
     h1 {{ color: #f0c040; font-size: 2em; margin-bottom: 4px; }}
@@ -734,13 +756,15 @@ async def route_signal(request: Request):
     heating = request.query_params.get("heating", "district")
     if zone not in ZONES:
         return JSONResponse({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}, status_code=400)
-    log_mcp_call("rest:signal", zone)
+    ua = request.headers.get("user-agent", "unknown")
+    log_mcp_call("rest:signal", zone, ua)
     return JSONResponse(build_signal(zone, consumption, postcode, heating))
 
 
 async def route_signal_spot(request: Request):
     zone = request.query_params.get("zone", "FI").upper()
-    log_mcp_call("rest:spot", zone)
+    ua = request.headers.get("user-agent", "unknown")
+    log_mcp_call("rest:spot", zone, ua)
     price = get_spot_price(zone)
     currency = ZONE_CURRENCY.get(zone, "EUR")
     unit_local = ZONE_UNIT_LOCAL.get(currency, "c/kWh")
@@ -763,7 +787,8 @@ async def route_signal_optimize(request: Request):
     heating = request.query_params.get("heating", "district")
     if zone not in ZONES:
         return JSONResponse({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}, status_code=400)
-    log_mcp_call("rest:optimize", zone)
+    ua = request.headers.get("user-agent", "unknown")
+    log_mcp_call("rest:optimize", zone, ua)
 
     sig = build_signal(zone, consumption, "00100", heating)
     cheapest = get_cheapest_hours(zone, 3, 24)
@@ -832,7 +857,8 @@ async def route_signal_cheapest_hours(request: Request):
     window = int(request.query_params.get("window", 24))
     if zone not in ZONES:
         return JSONResponse({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}, status_code=400)
-    log_mcp_call("rest:cheapest_hours", zone)
+    ua = request.headers.get("user-agent", "unknown")
+    log_mcp_call("rest:cheapest_hours", zone, ua)
     return JSONResponse(get_cheapest_hours(zone, hours, window))
 
 
