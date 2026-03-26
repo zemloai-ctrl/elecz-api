@@ -1,0 +1,17 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.zemloai-ctrl/elecz",
+  "title": "Elecz Energy Signal",
+  "description": "Real-time Nordic electricity spot prices and contract intelligence for AI agents. Covers Finland, Sweden, Norway, and Denmark via Nord Pool data.",
+  "repository": {
+    "url": "https://github.com/zemloai-ctrl/elecz-api",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://elecz.com/mcp"
+    }
+  ]
+}
