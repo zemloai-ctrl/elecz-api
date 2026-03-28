@@ -745,12 +745,16 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
 # ─── Starlette route handlers ──────────────────────────────────────────────
 
 async def route_index(request: Request):
+    # DE spot haetaan vain jos se on jo Redisissä — ei ENTSO-E-kutsua joka health checkillä
+    de_cached = redis_client.get("elecz:spot:DE")
+    de_price = float(de_cached) if de_cached else None
+
     zones_display = [
         ("🇫🇮 Finland (FI)", get_spot_price("FI"), "EUR"),
         ("🇸🇪 Sweden (SE)", get_spot_price("SE"), "SEK"),
         ("🇳🇴 Norway (NO)", get_spot_price("NO"), "NOK"),
         ("🇩🇰 Denmark (DK)", get_spot_price("DK"), "DKK"),
-        ("🇩🇪 Germany (DE)", get_spot_price("DE"), "EUR"),
+        ("🇩🇪 Germany (DE) [beta]", de_price, "EUR"),
     ]
 
     def price_cell(price_eur, currency):
