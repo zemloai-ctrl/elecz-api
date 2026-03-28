@@ -8,6 +8,7 @@ Maintained by Sakari Korkia-Aho / Zemlo AI — Kokkola, Finland
 
 import os
 import json
+import time
 import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
@@ -38,6 +39,9 @@ FRANKFURTER_URL = "https://api.frankfurter.app/latest"
 REDIS_TTL_SPOT = 3600
 REDIS_TTL_CONTRACTS = 86400
 REDIS_TTL_FX = 86400
+
+ABNORMAL_PRICE_HIGH = 300.0   # EUR/MWh — hintapiikki
+ABNORMAL_PRICE_LOW  = -50.0   # EUR/MWh — negatiivinen ääriarvo
 
 PROVIDER_URLS = {
     "FI": {
@@ -78,6 +82,20 @@ PROVIDER_URLS = {
         "vindstod": "https://www.vindstod.dk",
         "nettopower": "https://www.nettopower.dk",
         "cheap_energy": "https://www.cheapenergy.dk",
+    },
+    "DE": {
+        "tibber": "https://tibber.com/de/stromtarif",
+        "octopus": "https://octopusenergy.de/strom",
+        "e_wie_einfach": "https://www.e-wie-einfach.de/",
+        "yello": "https://www.yello.de/strom/stromtarife/",
+        "eon": "https://www.eon.de/de/pk/strom.html",
+        "vattenfall": "https://www.vattenfall.de/strom",
+        "enbw": "https://www.enbw.com/privatkunden/strom",
+        "naturstrom": "https://www.naturstrom.de/privatkunden/strom/",
+        "lichtblick": "https://www.lichtblick.de/oekostrom/",
+        "polarstern": "https://www.polarstern-energie.de/strom/",
+        "extraenergie": "https://www.extraenergie.com/strom/",
+        "gruenwelt": "https://www.gruenwelt.de/strom/",
     },
 }
 
@@ -121,6 +139,20 @@ PROVIDER_DIRECT_URLS = {
         "nettopower": "https://www.nettopower.dk",
         "cheap_energy": "https://www.cheapenergy.dk",
     },
+    "DE": {
+        "tibber": "https://tibber.com/de",
+        "octopus": "https://octopusenergy.de",
+        "e_wie_einfach": "https://www.e-wie-einfach.de",
+        "yello": "https://www.yello.de",
+        "eon": "https://www.eon.de",
+        "vattenfall": "https://www.vattenfall.de",
+        "enbw": "https://www.enbw.com",
+        "naturstrom": "https://www.naturstrom.de",
+        "lichtblick": "https://www.lichtblick.de",
+        "polarstern": "https://www.polarstern-energie.de",
+        "extraenergie": "https://www.extraenergie.com",
+        "gruenwelt": "https://www.gruenwelt.de",
+    },
 }
 
 ZONES = {
@@ -139,6 +171,7 @@ ZONES = {
     "DK": "10YDK-1--------W",
     "DK1": "10YDK-1--------W",
     "DK2": "10YDK-2--------M",
+    "DE": "10Y1001A1001A83F",
 }
 
 ZONE_CURRENCY = {
@@ -146,6 +179,7 @@ ZONE_CURRENCY = {
     "SE": "SEK", "SE1": "SEK", "SE2": "SEK", "SE3": "SEK", "SE4": "SEK",
     "NO": "NOK", "NO1": "NOK", "NO2": "NOK", "NO3": "NOK", "NO4": "NOK", "NO5": "NOK",
     "DK": "DKK", "DK1": "DKK", "DK2": "DKK",
+    "DE": "EUR",
 }
 
 ZONE_UNIT_LOCAL = {
@@ -196,10 +230,13 @@ def _parse_entsoe_xml(xml_text: str) -> list[dict]:
             pos = int(point.find("ns:position", ns).text)
             price = float(point.find("ns:price.amount", ns).text)
             hour = start + timedelta(hours=pos - 1)
-            rows.append({"hour": hour, "price_eur_mwh": price})
+            is_abnormal = price > ABNORMAL_PRICE_HIGH or price < ABNORMAL_PRICE_LOW
+            rows.append({"hour": hour, "price_eur_mwh": price, "is_abnormal": is_abnormal})
     return rows
 
-def fetch_day_ahead(zone: str, date: datetime) -> list[dict]:
+
+def fetch_day_ahead(zone: str, date: datetime, _retry: int = 3) -> list[dict]:
+    """Fetch ENTSO-E day-ahead prices with retry and rate-limit detection."""
     zone_code = ZONES.get(zone)
     if not zone_code:
         return []
@@ -211,13 +248,25 @@ def fetch_day_ahead(zone: str, date: datetime) -> list[dict]:
         "periodStart": date.strftime("%Y%m%d0000"),
         "periodEnd": date.strftime("%Y%m%d2300"),
     }
-    try:
-        resp = httpx.get(ENTSOE_API_URL, params=params, timeout=15)
-        resp.raise_for_status()
-        return _parse_entsoe_xml(resp.text)
-    except Exception as e:
-        logger.error(f"ENTSO-E day-ahead failed zone={zone}: {e}")
-        return []
+    for attempt in range(1, _retry + 1):
+        try:
+            resp = httpx.get(ENTSOE_API_URL, params=params, timeout=15)
+            if resp.status_code == 429:
+                wait = 60 * attempt
+                logger.warning(f"ENTSO-E rate limit zone={zone}, waiting {wait}s (attempt {attempt}/{_retry})")
+                time.sleep(wait)
+                continue
+            resp.raise_for_status()
+            return _parse_entsoe_xml(resp.text)
+        except httpx.HTTPStatusError as e:
+            logger.error(f"ENTSO-E HTTP error zone={zone} attempt={attempt}: {e}")
+        except Exception as e:
+            logger.error(f"ENTSO-E fetch failed zone={zone} attempt={attempt}: {e}")
+        if attempt < _retry:
+            time.sleep(5 * attempt)
+    logger.error(f"ENTSO-E all {_retry} attempts failed zone={zone}")
+    return []
+
 
 def get_spot_price(zone: str = "FI") -> Optional[float]:
     key = f"elecz:spot:{zone}"
@@ -248,6 +297,7 @@ def get_spot_price(zone: str = "FI") -> Optional[float]:
         logger.error(f"Supabase fallback failed {zone}: {e}")
     return None
 
+
 def save_day_ahead_to_supabase(zone: str, rows: list[dict]):
     # Deduplicate by hour to avoid ON CONFLICT errors when ENTSO-E returns duplicate rows
     seen = set()
@@ -264,6 +314,7 @@ def save_day_ahead_to_supabase(zone: str, rows: list[dict]):
             "hour": r["hour"].isoformat(),
             "price_eur_mwh": r["price_eur_mwh"],
             "price_ckwh": round(r["price_eur_mwh"] / 10, 4),
+            "is_abnormal": r.get("is_abnormal", False),
             "source": "ENTSO-E",
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -293,6 +344,7 @@ def get_exchange_rate(currency: str) -> float:
     except Exception as e:
         logger.error(f"Frankfurter failed {currency}: {e}")
         return 1.0
+
 
 def convert_price(price_eur: Optional[float], currency: str) -> Optional[float]:
     if price_eur is None or currency == "EUR":
@@ -364,6 +416,7 @@ def get_cheapest_hours(zone: str, n_hours: int = 5, window_h: int = 24) -> dict:
         "powered_by": "Elecz.com",
     }
 
+
 def _best_consecutive_window(rows: list, window: int) -> Optional[dict]:
     """Find the best consecutive window in chronologically sorted rows."""
     if len(rows) < window:
@@ -377,11 +430,13 @@ def _best_consecutive_window(rows: list, window: int) -> Optional[dict]:
             best_end = rows[i + window - 1]["hour"][:16]
     return {"start": best_start, "end": best_end, "avg_price_eur": round(best_avg, 4)}
 
+
 def _expensive_hours(rows: list, avg: float) -> list[str]:
     return [r["hour"][:16] for r in rows if r["price_ckwh"] > avg * 1.3][:6]
 
+
 def _consumption_recommendation(state: str) -> str:
-    if state == "cheap":
+    if state in ("cheap", "negative"):
         return "run_high_consumption_tasks"
     if state == "expensive":
         return "avoid_high_consumption"
@@ -391,7 +446,41 @@ def _consumption_recommendation(state: str) -> str:
 
 def scrape_provider(provider: str, url: str, zone: str) -> Optional[dict]:
     now_iso = datetime.now(timezone.utc).isoformat()
-    prompt = f"""
+
+    # DE-spesifinen prompti
+    if zone == "DE":
+        prompt = f"""
+Search for the current electricity contract pricing from this provider: {url}
+Provider: {provider}, Country/zone: {zone}
+Assume location: Berlin, PLZ 10115 (use as baseline if postcode is required).
+
+Return Arbeitspreis as brutto ct/kWh including MwSt (19%).
+If price is listed as netto, multiply by 1.19.
+Ignore: Neukundenbonus, Sofortbonus, Treuebonus, promotional first-year prices, and campaign discounts.
+Return only the standard ongoing tariff price.
+
+Return ONLY a valid JSON object with no markdown, no explanation:
+{{
+  "provider": "{provider}",
+  "zone": "{zone}",
+  "spot_margin_ckwh": <float or null>,
+  "arbeitspreis_ckwh": <float or null>,
+  "basic_fee_eur_month": <float or null>,
+  "fixed_price_ckwh": <float or null>,
+  "contract_type": "spot" | "fixed" | "fixed_term" | "dynamic",
+  "contract_duration_months": <int or null>,
+  "new_customers_only": <bool>,
+  "below_wholesale": <bool>,
+  "price_includes_tax": <bool>,
+  "grundpreis_unit": "eur_month" | "eur_year",
+  "preisgarantie": "full" | "partial" | "none",
+  "reliability": "high" | "medium" | "low",
+  "scraped_at": "{now_iso}"
+}}
+Note: arbeitspreis_ckwh must be between 5 and 100 ct/kWh. If value seems to be in EUR/kWh, multiply by 100.
+"""
+    else:
+        prompt = f"""
 Search for the current electricity contract pricing from this provider: {url}
 Provider: {provider}, Country/zone: {zone}
 
@@ -401,6 +490,7 @@ Return ONLY a valid JSON object with no markdown, no explanation:
   "provider": "{provider}",
   "zone": "{zone}",
   "spot_margin_ckwh": <float or null>,
+  "arbeitspreis_ckwh": <float or null>,
   "basic_fee_eur_month": <float or null>,
   "fixed_price_ckwh": <float or null>,
   "contract_type": "spot" | "fixed" | "fixed_term",
@@ -415,11 +505,23 @@ Return ONLY a valid JSON object with no markdown, no explanation:
         text = response.text.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
         data = json.loads(text)
         data["scraped_at"] = now_iso
+
+        # Range-validointi: jos arbeitspreis näyttää olevan EUR/kWh eikä ct/kWh
+        if data.get("arbeitspreis_ckwh") and data["arbeitspreis_ckwh"] > 100:
+            logger.warning(f"arbeitspreis_ckwh={data['arbeitspreis_ckwh']} looks like EUR/kWh, dividing by 100")
+            data["arbeitspreis_ckwh"] = round(data["arbeitspreis_ckwh"] / 100, 4)
+
+        # Hylkää epärealistiset arvot
+        if data.get("arbeitspreis_ckwh") and data["arbeitspreis_ckwh"] < 5:
+            logger.warning(f"arbeitspreis_ckwh={data['arbeitspreis_ckwh']} too low, flagging data_errors")
+            data["data_errors"] = True
+
         logger.info(f" ✓ {zone}/{provider}")
         return data
     except Exception as e:
         logger.error(f" Scrape failed {zone}/{provider}: {e}")
         return None
+
 
 def update_contract_prices():
     logger.info("Updating contract prices...")
@@ -441,8 +543,9 @@ def update_contract_prices():
         redis_client.delete(f"elecz:contracts:{zone}")
     logger.info("Contract update complete.")
 
+
 def update_spot_prices():
-    for zone in ["FI", "SE", "NO", "DK"]:
+    for zone in ["FI", "SE", "NO", "DK", "DE"]:
         redis_client.delete(f"elecz:spot:{zone}")
         now = datetime.now(timezone.utc)
         rows = fetch_day_ahead(zone, now)
@@ -481,6 +584,7 @@ def trust_score(contract: dict) -> int:
     if contract.get("data_errors"): score -= 10
     return max(0, score)
 
+
 def decision_hint(spot: float, contract: dict, consumption: int, heating: str) -> dict:
     if consumption <= 2000 and heating == "district":
         return {"hint": "spot_recommended", "reason": "Low consumption: minimize basic fee. Spot is cheapest long-term."}
@@ -491,12 +595,50 @@ def decision_hint(spot: float, contract: dict, consumption: int, heating: str) -
             return {"hint": "consider_fixed", "reason": "High consumption + elevated spot. Fixed price offers certainty."}
     return {"hint": "compare_options", "reason": "Compare spot margin + basic fee vs fixed price for your consumption."}
 
+
 def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> dict:
+    # DE data_pending guard — ei sopimussuosituksia ennen validointia
+    if zone == "DE":
+        contracts = get_contracts(zone)
+        if not contracts:
+            spot = get_spot_price(zone)
+            if spot is not None:
+                if spot < 0:
+                    energy_state = "negative"
+                elif spot < 3.0:
+                    energy_state = "cheap"
+                elif spot > 8.0:
+                    energy_state = "expensive"
+                else:
+                    energy_state = "normal"
+            else:
+                energy_state = "unknown"
+            return {
+                "signal": "elecz",
+                "version": "1.4",
+                "zone": "DE",
+                "currency": "EUR",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "energy_state": energy_state,
+                "is_good_time_to_use_energy": energy_state in ("cheap", "negative"),
+                "switch_recommended": False,
+                "spot_price": {"eur": spot, "local": spot, "unit": "c/kWh"},
+                "status": "data_pending",
+                "message": "DE contract data is being validated. Spot price available, contract recommendations coming soon.",
+                "disclaimer": "Price excludes regional Netzentgelt (varies 10-15 ct/kWh by area). Confidence reduced without PLZ.",
+                "powered_by": "Elecz.com",
+            }
+
     spot = get_spot_price(zone)
     contracts = get_contracts(zone)
     currency = ZONE_CURRENCY.get(zone, "EUR")
     spot_local = convert_price(spot, currency)
     fx = get_exchange_rate(currency)
+
+    # DE: confidence alennetaan jos ei PLZ:aa
+    base_confidence = 0.95 if spot else 0.0
+    if zone == "DE" and postcode in ("00100", "", None):
+        base_confidence = min(base_confidence, 0.85)
 
     ranked = []
     for c in contracts:
@@ -516,14 +658,22 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
     best = ranked[0] if ranked else None
     hint = decision_hint(spot or 0, best or {}, consumption, heating) if best else {}
     action_url = f"https://elecz.com/go/{best['provider']}" if best else None
-    confidence = 0.95 if spot else 0.0
+    confidence = base_confidence
 
-    if spot:
-        if spot < 3.0: energy_state = "cheap"
-        elif spot > 8.0: energy_state = "expensive"
-        else: energy_state = "normal"
+    if spot is not None:
+        if spot < 0:
+            energy_state = "negative"
+        elif spot < 3.0:
+            energy_state = "cheap"
+        elif spot > 8.0:
+            energy_state = "expensive"
+        else:
+            energy_state = "normal"
     else:
         energy_state = "unknown"
+
+    # Boolean helpers
+    is_good_time_to_use_energy = energy_state in ("cheap", "negative")
 
     best_annual = best.get("annual_cost_estimate") if best else None
 
@@ -538,14 +688,26 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
     savings_local_year = round(savings_eur_year * fx, 2) if savings_eur_year else None
     savings_currency = currency
     should_switch = bool(savings_eur_year and savings_eur_year > 0)
+    switch_recommended = should_switch
 
-    return {
+    # Synkronoi decision_hint ja action.status
+    raw_hint = hint.get("hint")
+    raw_reason = hint.get("reason")
+    if switch_recommended and raw_hint == "compare_options":
+        raw_hint = "switch_recommended"
+        raw_reason = f"Switching saves ~{savings_eur_year} EUR/year. {raw_reason}"
+
+    action_status = "switch_now" if switch_recommended else "monitor"
+
+    result = {
         "signal": "elecz",
-        "version": "1.3",
+        "version": "1.4",
         "zone": zone,
         "currency": currency,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "energy_state": energy_state,
+        "is_good_time_to_use_energy": is_good_time_to_use_energy,
+        "switch_recommended": switch_recommended,
         "confidence": confidence,
         "spot_price": {
             "eur": spot,
@@ -560,20 +722,25 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
             "annual_cost_estimate": best_annual,
             "trust_score": best.get("trust_score") if best else None,
         } if best else None,
-        "decision_hint": hint.get("hint"),
-        "reason": hint.get("reason"),
+        "decision_hint": raw_hint,
+        "reason": raw_reason,
         "action": {
-            "type": "switch_contract" if should_switch else "monitor",
+            "type": "switch_contract" if switch_recommended else "monitor",
             "available": bool(action_url),
             "action_link": action_url,
             "expected_savings_eur_year": savings_eur_year,
             "expected_savings_local_year": savings_local_year,
             "savings_currency": savings_currency,
             "confidence": confidence,
-            "status": "switch_now" if should_switch else "direct",
+            "status": action_status,
         },
         "powered_by": "Elecz.com",
     }
+
+    if zone == "DE":
+        result["disclaimer"] = "Price excludes regional Netzentgelt (varies 10-15 ct/kWh by area)."
+
+    return result
 
 # ─── Starlette route handlers ──────────────────────────────────────────────
 
@@ -583,6 +750,7 @@ async def route_index(request: Request):
         ("🇸🇪 Sweden (SE)", get_spot_price("SE"), "SEK"),
         ("🇳🇴 Norway (NO)", get_spot_price("NO"), "NOK"),
         ("🇩🇰 Denmark (DK)", get_spot_price("DK"), "DKK"),
+        ("🇩🇪 Germany (DE)", get_spot_price("DE"), "EUR"),
     ]
 
     def price_cell(price_eur, currency):
@@ -605,7 +773,7 @@ async def route_index(request: Request):
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "Elecz",
-        "description": "Real-time Nordic electricity price signal API for AI agents. Returns spot prices, cheapest hours, and contract recommendations for Finland, Sweden, Norway and Denmark.",
+        "description": "Real-time electricity price signal API for AI agents. Returns spot prices, cheapest hours, and contract recommendations for Finland, Sweden, Norway, Denmark and Germany.",
         "url": "https://elecz.com",
         "applicationCategory": "Utilities",
         "operatingSystem": "Any",
@@ -627,7 +795,7 @@ async def route_index(request: Request):
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>⚡ Elecz.com — Energy Signal API</title>
-  <meta name="description" content="Real-time Nordic electricity price signal API for AI agents. Spot prices, cheapest hours, and contract recommendations for Finland, Sweden, Norway and Denmark.">
+  <meta name="description" content="Real-time electricity price signal API for AI agents. Spot prices, cheapest hours, and contract recommendations for Finland, Sweden, Norway, Denmark and Germany.">
   <script type="application/ld+json">
 {json_ld}
   </script>
@@ -653,7 +821,7 @@ async def route_index(request: Request):
   <p>Use Elecz whenever electricity cost or timing affects a decision.</p>
   <span class="badge">LIVE</span>
 
-  <h2>Nordic Spot Prices — Now</h2>
+  <h2>Spot Prices — Now</h2>
   <table>
     <tr><th>Zone</th><th>Price</th><th>Status</th></tr>
     {rows_html}
@@ -680,7 +848,7 @@ async def route_index(request: Request):
 }}</pre>
 
   <p style="color:#333; margin-top:60px; font-size:0.8em;">
-    ⚡ Elecz.com — Energy Decision Signal API · Powered by ENTSO-E · Nordic markets<br>
+    ⚡ Elecz.com — Energy Decision Signal API · Powered by ENTSO-E · Nordic + DE markets<br>
     Maintained by <a href="mailto:sakke@zemloai.com">Sakari Korkia-Aho / Zemlo AI</a> ·
     <a href="/privacy">Privacy Policy</a>
   </p>
@@ -813,7 +981,7 @@ async def route_signal_optimize(request: Request):
         else:
             savings_display = f"{savings_eur} EUR"
         reason = f"Save {savings_display}/year by switching to {provider}"
-    elif state == "cheap":
+    elif state in ("cheap", "negative"):
         primary_action = "run_now"
         reason = "Electricity is cheap now — ideal time for high-consumption tasks"
     elif state == "expensive":
@@ -842,6 +1010,8 @@ async def route_signal_optimize(request: Request):
             "savings_eur": savings_delay,
         },
         "energy_state": state,
+        "is_good_time_to_use_energy": sig.get("is_good_time_to_use_energy", False),
+        "switch_recommended": sig.get("switch_recommended", False),
         "spot_price_eur": spot,
         "best_window": cheapest.get("best_3h_window"),
         "contract_switch": {
@@ -891,7 +1061,7 @@ async def route_go(request: Request):
 
 
 async def route_health(request: Request):
-    return JSONResponse({"status": "ok", "service": "elecz", "version": "2.1"})
+    return JSONResponse({"status": "ok", "service": "elecz", "version": "1.4"})
 
 
 async def route_robots(request: Request):
@@ -919,8 +1089,8 @@ async def route_server_card(request: Request):
     return JSONResponse({
         "name": "elecz",
         "displayName": "⚡ Elecz — Energy Decision Signal",
-        "description": "Electricity optimization brain for AI agents and automation. Use Elecz whenever electricity cost or timing affects a decision. Real-time Nordic spot prices, cheapest hours, and contract recommendations.",
-        "version": "2.1.0",
+        "description": "Electricity optimization brain for AI agents and automation. Use Elecz whenever electricity cost or timing affects a decision. Real-time spot prices, cheapest hours, and contract recommendations.",
+        "version": "1.4.0",
         "homepage": "https://elecz.com",
         "privacy_url": "https://elecz.com/privacy",
         "maintainer": "Sakari Korkia-Aho / Zemlo AI",
@@ -929,11 +1099,11 @@ async def route_server_card(request: Request):
             "transport": "streamable-http",
         },
         "tools": [
-            {"name": "spot_price", "description": "Get current electricity spot price for a Nordic zone."},
+            {"name": "spot_price", "description": "Get current electricity spot price for a Nordic or DE zone."},
             {"name": "cheapest_hours", "description": "Get cheapest electricity hours next 24h for EV charging and home automation."},
             {"name": "energy_decision_signal", "description": "Full signal: spot price, best contract, energy state, and recommendation."},
             {"name": "optimize", "description": "One-call optimization. Returns run_now, delay, switch_contract, or monitor."},
-            {"name": "best_energy_contract", "description": "Find cheapest electricity contract for a Nordic zone."},
+            {"name": "best_energy_contract", "description": "Find cheapest electricity contract for a Nordic or DE zone."},
         ],
     })
 
@@ -944,35 +1114,35 @@ elecz_mcp = FastMCP("elecz")
 
 class _ZoneInput(PydanticBaseModel):
     model_config = PydanticConfigDict(str_strip_whitespace=True, extra="forbid")
-    zone: str = PydanticField(default="FI", description="Nordic bidding zone: FI, SE, NO, DK or sub-zones SE1-SE4, NO1-NO5, DK1-DK2")
+    zone: str = PydanticField(default="FI", description="Bidding zone: FI, SE, NO, DK, DE or sub-zones SE1-SE4, NO1-NO5, DK1-DK2")
 
 
 class _SignalInput(PydanticBaseModel):
     model_config = PydanticConfigDict(str_strip_whitespace=True, extra="forbid")
-    zone: str = PydanticField(default="FI", description="Nordic bidding zone: FI, SE, NO, DK")
-    consumption: int = PydanticField(default=10000, ge=100, le=100000, description="Annual electricity consumption in kWh. Typical apartment: 1500-2000 kWh, house with electric heating: 15000-20000 kWh.")
+    zone: str = PydanticField(default="FI", description="Bidding zone: FI, SE, NO, DK, DE")
+    consumption: int = PydanticField(default=10000, ge=100, le=100000, description="Annual electricity consumption in kWh.")
     heating: str = PydanticField(default="district", description="Heating type: district or electric")
 
 
 class _CheapestInput(PydanticBaseModel):
     model_config = PydanticConfigDict(str_strip_whitespace=True, extra="forbid")
-    zone: str = PydanticField(default="FI", description="Nordic bidding zone")
+    zone: str = PydanticField(default="FI", description="Bidding zone")
     hours: int = PydanticField(default=5, ge=1, le=24, description="Number of cheapest hours to return")
     window: int = PydanticField(default=24, ge=1, le=48, description="Hours to look ahead")
 
 
 @elecz_mcp.tool(name="spot_price")
 def _mcp_spot(zone: str = "FI") -> str:
-    """Get current electricity spot price for a Nordic zone.
+    """Get current electricity spot price for a Nordic or German zone.
 
     Returns real-time spot price in EUR c/kWh and local currency (SEK/NOK/DKK).
     Data source: ENTSO-E Transparency Platform, updated hourly.
 
     Use when asked: what is the electricity price now, how much does electricity cost today,
-    what is the spot price in Finland/Sweden/Norway/Denmark.
+    what is the spot price in Finland/Sweden/Norway/Denmark/Germany.
 
     Args:
-        zone: Nordic bidding zone. FI=Finland, SE=Sweden, NO=Norway, DK=Denmark.
+        zone: Bidding zone. FI=Finland, SE=Sweden, NO=Norway, DK=Denmark, DE=Germany.
               Sub-zones: SE1-SE4, NO1-NO5, DK1-DK2.
     """
     log_mcp_call("spot_price", zone.upper())
@@ -999,7 +1169,7 @@ def _mcp_cheapest(zone: str = "FI", hours: int = 5, window: int = 24) -> str:
     when should I run the dishwasher or washing machine, optimize home automation for cheapest electricity.
 
     Args:
-        zone: Nordic bidding zone. FI, SE, NO, DK.
+        zone: Bidding zone. FI, SE, NO, DK, DE.
         hours: Number of cheapest hours to return (default 5).
         window: Hours to look ahead (default 24).
     """
@@ -1009,16 +1179,16 @@ def _mcp_cheapest(zone: str = "FI", hours: int = 5, window: int = 24) -> str:
 
 @elecz_mcp.tool(name="energy_decision_signal")
 def _mcp_signal(zone: str = "FI", consumption: int = 2000, heating: str = "district") -> str:
-    """Get full energy decision signal for a Nordic zone.
+    """Get full energy decision signal for a Nordic or German zone.
 
     Returns spot price, best electricity contract recommendation,
-    energy state (cheap/normal/expensive), confidence score, and decision hint.
+    energy state (cheap/normal/expensive/negative), confidence score, and decision hint.
 
     Use when asked: what is the electricity price now, which electricity contract should I choose,
     should I switch my electricity contract, what is the best electricity deal.
 
     Args:
-        zone: Nordic bidding zone. FI, SE, NO, DK.
+        zone: Bidding zone. FI, SE, NO, DK, DE.
         consumption: Annual electricity consumption in kWh (default 2000).
         heating: Heating type: district or electric (default district).
     """
@@ -1037,7 +1207,7 @@ def _mcp_contract(zone: str = "FI", consumption: int = 2000, heating: str = "dis
     or fixed price, which electricity provider is cheapest.
 
     Args:
-        zone: Nordic bidding zone. FI, SE, NO, DK.
+        zone: Bidding zone. FI, SE, NO, DK, DE.
         consumption: Annual electricity consumption in kWh (default 2000).
         heating: Heating type: district or electric (default district).
     """
@@ -1065,7 +1235,7 @@ def _mcp_optimize(zone: str = "FI", consumption: int = 2000, heating: str = "dis
     Use for EV charging decisions, home automation scheduling, batch job timing, contract switching.
 
     Args:
-        zone: Nordic bidding zone. FI, SE, NO, DK.
+        zone: Bidding zone. FI, SE, NO, DK, DE.
         consumption: Annual electricity consumption in kWh (default 2000).
         heating: Heating type: district or electric (default district).
     """
