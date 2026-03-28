@@ -1251,7 +1251,7 @@ def _mcp_optimize(zone: str = "FI", consumption: int = 2000, heating: str = "dis
 
 scheduler = BackgroundScheduler(timezone="Europe/Helsinki")
 scheduler.add_job(update_spot_prices, "cron", minute=5)
-scheduler.add_job(update_contract_prices, "cron", hour=3, minute=30)
+scheduler.add_job(update_contract_prices, "cron", hour=2, minute=30)
 
 # ─── Starlette app with FastMCP lifespan ───────────────────────────────────
 
