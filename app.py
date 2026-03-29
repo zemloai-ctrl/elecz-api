@@ -46,6 +46,15 @@ ABNORMAL_PRICE_LOW  = -50.0   # EUR/MWh — negatiivinen ääriarvo
 # Zones that use live ENTSO-E fetch on cache miss (DE excluded — scheduler only)
 LIVE_FETCH_ZONES = {"FI", "SE", "SE1", "SE2", "SE3", "SE4", "NO", "NO1", "NO2", "NO3", "NO4", "NO5", "DK", "DK1", "DK2"}
 
+# Default annual consumption by market (kWh)
+# DE: saksalainen kotitalous ~3500 kWh, pohjoismainen ~2000 kWh
+DEFAULT_CONSUMPTION = {
+    "FI": 2000, "SE": 2000, "SE1": 2000, "SE2": 2000, "SE3": 2000, "SE4": 2000,
+    "NO": 2000, "NO1": 2000, "NO2": 2000, "NO3": 2000, "NO4": 2000, "NO5": 2000,
+    "DK": 2000, "DK1": 2000, "DK2": 2000,
+    "DE": 3500,
+}
+
 PROVIDER_URLS = {
     "FI": {
         "tibber": "https://tibber.com/fi/sahkosopimus",
@@ -498,6 +507,10 @@ Search for the current electricity contract pricing from this provider: {url}
 Provider: {provider}, Country/zone: {zone}
 Assume location: Berlin, PLZ 10115 (use as baseline if postcode is required).
 
+IMPORTANT: If provider is "tibber" and zone is "DE", set contract_type to "dynamic" and is_spot to true.
+Tibber Germany uses exchange-based dynamic pricing (Tibber Dynamic), not a fixed spot margin.
+Do not return a spot_margin_ckwh for Tibber DE — return arbeitspreis_ckwh as the current average effective price if available.
+
 Return Arbeitspreis as brutto ct/kWh including MwSt (19%).
 If price is listed as netto, multiply by 1.19.
 Ignore: Neukundenbonus, Sofortbonus, Treuebonus, promotional first-year prices, and campaign discounts.
@@ -560,6 +573,12 @@ Return ONLY a valid JSON object with no markdown, no explanation:
         if data.get("arbeitspreis_ckwh") and data["arbeitspreis_ckwh"] < 5:
             logger.warning(f"arbeitspreis_ckwh={data['arbeitspreis_ckwh']} too low, flagging data_errors")
             data["data_errors"] = True
+
+        # Enforce Tibber DE = dynamic regardless of what Gemini returns
+        if provider == "tibber" and zone == "DE":
+            data["contract_type"] = "dynamic"
+            data["is_spot"] = True
+            data["spot_margin_ckwh"] = None  # Tibber DE has no fixed margin
 
         logger.info(f" ✓ {zone}/{provider}")
         return data
@@ -654,18 +673,54 @@ def trust_score(contract: dict) -> int:
     return max(0, score)
 
 
-def decision_hint(spot: float, contract: dict, consumption: int, heating: str) -> dict:
-    if consumption <= 2000 and heating == "district":
+def decision_hint(spot: float, contract: dict, consumption: int, heating: str, zone: str = "FI") -> dict:
+    # DE-specific defaults: saksalainen kuluttaa enemmän
+    de_high_consumption = zone == "DE" and consumption >= 3500
+    nordic_low_consumption = zone != "DE" and consumption <= 2000
+
+    if nordic_low_consumption and heating == "district":
         return {"hint": "spot_recommended", "reason": "Low consumption: minimize basic fee. Spot is cheapest long-term."}
+    if de_high_consumption:
+        if spot and spot < 5.0:
+            return {"hint": "stay_spot", "reason": "High consumption + low spot price. Dynamic/spot contract is cheapest now."}
+        else:
+            return {"hint": "consider_fixed", "reason": "High consumption + elevated spot price. Fixed Arbeitspreis offers cost certainty."}
     if consumption >= 15000:
-        if spot < 5.0:
+        if spot and spot < 5.0:
             return {"hint": "stay_spot", "reason": "High consumption + low spot price. Spot is cheapest now."}
         else:
             return {"hint": "consider_fixed", "reason": "High consumption + elevated spot. Fixed price offers certainty."}
     return {"hint": "compare_options", "reason": "Compare spot margin + basic fee vs fixed price for your consumption."}
 
 
-def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> dict:
+def _annual_cost(contract: dict, spot: Optional[float], consumption: int) -> Optional[float]:
+    """Calculate estimated annual cost for a contract given consumption and current spot."""
+    fee = contract.get("basic_fee_eur_month") or 0
+    fixed = contract.get("fixed_price_ckwh")
+    arbeitspreis = contract.get("arbeitspreis_ckwh")
+    margin = contract.get("spot_margin_ckwh") or 0
+    contract_type = contract.get("contract_type", "")
+
+    # Dynamic contracts (Tibber DE): use spot as proxy if no fixed arbeitspreis available
+    if contract_type == "dynamic" and not arbeitspreis and spot:
+        # Dynamic = spot price, no fixed margin — use spot as current cost estimate
+        return round((spot / 100) * consumption + fee * 12, 2)
+
+    effective_fixed = fixed or arbeitspreis
+    if effective_fixed:
+        return round((effective_fixed / 100) * consumption + fee * 12, 2)
+    if spot is not None:
+        return round(((spot + margin) / 100) * consumption + fee * 12, 2)
+    return None
+
+
+def build_signal(
+    zone: str,
+    consumption: int,
+    postcode: str,
+    heating: str,
+    current_annual_cost: Optional[float] = None,
+) -> dict:
     spot = get_spot_price(zone)
     contracts = get_contracts(zone)
     currency = ZONE_CURRENCY.get(zone, "EUR")
@@ -680,23 +735,16 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
     ranked = []
     for c in contracts:
         ts = trust_score(c)
-        margin = c.get("spot_margin_ckwh") or 0
-        fee = c.get("basic_fee_eur_month") or 0
-        fixed = c.get("fixed_price_ckwh")
-        # DE: use arbeitspreis_ckwh as effective fixed price if fixed_price_ckwh is absent
-        arbeitspreis = c.get("arbeitspreis_ckwh")
-        effective_fixed = fixed or (arbeitspreis if arbeitspreis else None)
-        if effective_fixed:
-            annual = (effective_fixed / 100) * consumption + fee * 12
-        elif spot:
-            annual = ((spot + margin) / 100) * consumption + fee * 12
-        else:
-            annual = None
+        annual = _annual_cost(c, spot, consumption)
         ranked.append({**c, "trust_score": ts, "annual_cost_estimate": round(annual, 2) if annual else None})
 
     ranked.sort(key=lambda x: (x["annual_cost_estimate"] or 9999, -x["trust_score"]))
-    best = ranked[0] if ranked else None
-    hint = decision_hint(spot or 0, best or {}, consumption, heating) if best else {}
+
+    # Top 3 contracts — avoids single-provider liability framing
+    top3 = ranked[:3]
+    best = top3[0] if top3 else None
+
+    hint = decision_hint(spot or 0, best or {}, consumption, heating, zone) if best else {}
     action_url = f"https://elecz.com/go/{best['provider']}" if best else None
     confidence = base_confidence
 
@@ -716,10 +764,17 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
 
     best_annual = best.get("annual_cost_estimate") if best else None
 
+    # Savings: compare best contract vs user's current cost (if provided),
+    # else vs median provider in the ranked list (not worst — avoids inflated framing).
     if best_annual:
-        worst = ranked[-1] if ranked else None
-        worst_annual = worst.get("annual_cost_estimate") if worst else None
-        savings_eur_year = round(worst_annual - best_annual, 2) if worst_annual and worst_annual > best_annual else None
+        if current_annual_cost and current_annual_cost > best_annual:
+            savings_eur_year = round(current_annual_cost - best_annual, 2)
+        elif len(ranked) > 1:
+            mid_idx = len(ranked) // 2
+            mid_annual = ranked[mid_idx].get("annual_cost_estimate")
+            savings_eur_year = round(mid_annual - best_annual, 2) if mid_annual and mid_annual > best_annual else None
+        else:
+            savings_eur_year = None
     else:
         savings_eur_year = None
 
@@ -736,6 +791,22 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
 
     action_status = "switch_now" if switch_recommended else "monitor"
 
+    # Build top_contracts list for response (cleaner subset of fields)
+    top_contracts_out = [
+        {
+            "rank": i + 1,
+            "provider": c.get("provider"),
+            "type": c.get("contract_type"),
+            "spot_margin_ckwh": c.get("spot_margin_ckwh"),
+            "arbeitspreis_ckwh": c.get("arbeitspreis_ckwh"),
+            "basic_fee_eur_month": c.get("basic_fee_eur_month"),
+            "annual_cost_estimate": c.get("annual_cost_estimate"),
+            "trust_score": c.get("trust_score"),
+            "direct_url": c.get("direct_url") or PROVIDER_DIRECT_URLS.get(zone, {}).get(c.get("provider")),
+        }
+        for i, c in enumerate(top3)
+    ]
+
     result = {
         "signal": "elecz",
         "version": "1.5",
@@ -751,6 +822,7 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
             "local": spot_local,
             "unit": "c/kWh",
         },
+        # best_contract kept for backwards compatibility
         "best_contract": {
             "provider": best.get("provider") if best else None,
             "type": best.get("contract_type") if best else None,
@@ -760,6 +832,8 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
             "annual_cost_estimate": best_annual,
             "trust_score": best.get("trust_score") if best else None,
         } if best else None,
+        # top_contracts: full ranked list of top 3
+        "top_contracts": top_contracts_out,
         "decision_hint": raw_hint,
         "reason": raw_reason,
         "action": {
@@ -769,6 +843,7 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
             "expected_savings_eur_year": savings_eur_year,
             "expected_savings_local_year": savings_local_year,
             "savings_currency": savings_currency,
+            "savings_basis": "vs_current_contract" if current_annual_cost else "vs_median_provider",
             "confidence": confidence,
             "status": action_status,
         },
@@ -966,13 +1041,19 @@ async def route_privacy(request: Request):
 
 async def route_signal(request: Request):
     zone = request.query_params.get("zone", "FI").upper()
-    consumption = int(request.query_params.get("consumption", 10000))
+    consumption = int(request.query_params.get("consumption", DEFAULT_CONSUMPTION.get(zone, 2000)))
     postcode = request.query_params.get("postcode", "00100")
     heating = request.query_params.get("heating", "district")
+    current_annual_cost = request.query_params.get("current_annual_cost")
+    if current_annual_cost:
+        try:
+            current_annual_cost = float(current_annual_cost)
+        except ValueError:
+            current_annual_cost = None
     if zone not in ZONES:
         return JSONResponse({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}, status_code=400)
     log_api_call("rest:signal", call_type="rest", zone=zone, ip=request.client.host)
-    return JSONResponse(build_signal(zone, consumption, postcode, heating))
+    return JSONResponse(build_signal(zone, consumption, postcode, heating, current_annual_cost))
 
 
 async def route_signal_spot(request: Request):
@@ -996,7 +1077,7 @@ async def route_signal_spot(request: Request):
 
 async def route_signal_optimize(request: Request):
     zone = request.query_params.get("zone", "FI").upper()
-    consumption = int(request.query_params.get("consumption", 10000))
+    consumption = int(request.query_params.get("consumption", DEFAULT_CONSUMPTION.get(zone, 2000)))
     heating = request.query_params.get("heating", "district")
     if zone not in ZONES:
         return JSONResponse({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}, status_code=400)
@@ -1140,7 +1221,7 @@ async def route_server_card(request: Request):
             {"name": "cheapest_hours", "description": "Get cheapest electricity hours next 24h for EV charging and home automation."},
             {"name": "energy_decision_signal", "description": "Full signal: spot price, best contract, energy state, and recommendation."},
             {"name": "optimize", "description": "One-call optimization. Returns run_now, delay, switch_contract, or monitor."},
-            {"name": "best_energy_contract", "description": "Find cheapest electricity contract for a Nordic or DE zone."},
+            {"name": "best_energy_contract", "description": "Find top 3 cheapest electricity contracts for a Nordic or DE zone."},
         ],
     })
 
@@ -1215,10 +1296,10 @@ def _mcp_cheapest(zone: str = "FI", hours: int = 5, window: int = 24) -> str:
 
 
 @elecz_mcp.tool(name="energy_decision_signal")
-def _mcp_signal(zone: str = "FI", consumption: int = 2000, heating: str = "district") -> str:
+def _mcp_signal(zone: str = "FI", consumption: Optional[int] = None, heating: str = "district") -> str:
     """Get full energy decision signal for a Nordic or German zone.
 
-    Returns spot price, best electricity contract recommendation,
+    Returns spot price, top 3 electricity contract recommendations,
     energy state (cheap/normal/expensive/negative), confidence score, and decision hint.
 
     Use when asked: what is the electricity price now, which electricity contract should I choose,
@@ -1226,35 +1307,45 @@ def _mcp_signal(zone: str = "FI", consumption: int = 2000, heating: str = "distr
 
     Args:
         zone: Bidding zone. FI, SE, NO, DK, DE.
-        consumption: Annual electricity consumption in kWh (default 2000).
+        consumption: Annual electricity consumption in kWh.
+                     Defaults to 3500 for DE, 2000 for Nordic zones.
         heating: Heating type: district or electric (default district).
     """
-    log_api_call("energy_decision_signal", call_type="mcp", zone=zone.upper())
-    return json.dumps(build_signal(zone.upper(), consumption, "00100", heating), ensure_ascii=False)
+    zone = zone.upper()
+    if consumption is None:
+        consumption = DEFAULT_CONSUMPTION.get(zone, 2000)
+    log_api_call("energy_decision_signal", call_type="mcp", zone=zone)
+    return json.dumps(build_signal(zone, consumption, "00100", heating), ensure_ascii=False)
 
 
 @elecz_mcp.tool(name="best_energy_contract")
-def _mcp_contract(zone: str = "FI", consumption: int = 2000, heating: str = "district") -> str:
-    """Find cheapest electricity contract for a given consumption profile.
+def _mcp_contract(zone: str = "FI", consumption: Optional[int] = None, heating: str = "district") -> str:
+    """Find top 3 cheapest electricity contracts for a given consumption profile.
 
-    Returns ranked contract recommendation with trust score,
-    estimated annual cost, expected savings, and direct link to switch.
+    Returns ranked contract recommendations with trust scores,
+    estimated annual costs, expected savings vs median market, and direct links to switch.
+
+    Returns top 3 options — final contract choice remains with the user.
 
     Use when asked: what is the best electricity contract for me, should I switch to spot pricing
     or fixed price, which electricity provider is cheapest.
 
     Args:
         zone: Bidding zone. FI, SE, NO, DK, DE.
-        consumption: Annual electricity consumption in kWh (default 2000).
+        consumption: Annual electricity consumption in kWh.
+                     Defaults to 3500 for DE, 2000 for Nordic zones.
         heating: Heating type: district or electric (default district).
     """
-    log_api_call("best_energy_contract", call_type="mcp", zone=zone.upper())
-    data = build_signal(zone.upper(), consumption, "00100", heating)
+    zone = zone.upper()
+    if consumption is None:
+        consumption = DEFAULT_CONSUMPTION.get(zone, 2000)
+    log_api_call("best_energy_contract", call_type="mcp", zone=zone)
+    data = build_signal(zone, consumption, "00100", heating)
     action = data.get("action", {})
-    best = data.get("best_contract", {})
     return json.dumps({
         "zone": data.get("zone"),
-        "best_contract": best,
+        "top_contracts": data.get("top_contracts", []),
+        "best_contract": data.get("best_contract"),  # backwards compat
         "decision_hint": data.get("decision_hint"),
         "reason": data.get("reason"),
         "action": action,
@@ -1263,7 +1354,7 @@ def _mcp_contract(zone: str = "FI", consumption: int = 2000, heating: str = "dis
 
 
 @elecz_mcp.tool(name="optimize")
-def _mcp_optimize(zone: str = "FI", consumption: int = 2000, heating: str = "district") -> str:
+def _mcp_optimize(zone: str = "FI", consumption: Optional[int] = None, heating: str = "district") -> str:
     """One-call electricity optimization. Returns single primary action.
 
     Action values: run_now (electricity cheap, act now), delay (expensive, wait for best window),
@@ -1273,11 +1364,15 @@ def _mcp_optimize(zone: str = "FI", consumption: int = 2000, heating: str = "dis
 
     Args:
         zone: Bidding zone. FI, SE, NO, DK, DE.
-        consumption: Annual electricity consumption in kWh (default 2000).
+        consumption: Annual electricity consumption in kWh.
+                     Defaults to 3500 for DE, 2000 for Nordic zones.
         heating: Heating type: district or electric (default district).
     """
-    log_api_call("optimize", call_type="mcp", zone=zone.upper())
-    data = build_signal(zone.upper(), consumption, "00100", heating)
+    zone = zone.upper()
+    if consumption is None:
+        consumption = DEFAULT_CONSUMPTION.get(zone, 2000)
+    log_api_call("optimize", call_type="mcp", zone=zone)
+    data = build_signal(zone, consumption, "00100", heating)
     return json.dumps(data, ensure_ascii=False)
 
 # ─── Scheduler ─────────────────────────────────────────────────────────────
