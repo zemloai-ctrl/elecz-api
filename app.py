@@ -43,6 +43,9 @@ REDIS_TTL_FX = 86400
 ABNORMAL_PRICE_HIGH = 300.0   # EUR/MWh — hintapiikki
 ABNORMAL_PRICE_LOW  = -50.0   # EUR/MWh — negatiivinen ääriarvo
 
+# Zones that use live ENTSO-E fetch on cache miss (DE excluded — scheduler only)
+LIVE_FETCH_ZONES = {"FI", "SE", "SE1", "SE2", "SE3", "SE4", "NO", "NO1", "NO2", "NO3", "NO4", "NO5", "DK", "DK1", "DK2"}
+
 PROVIDER_URLS = {
     "FI": {
         "tibber": "https://tibber.com/fi/sahkosopimus",
@@ -255,7 +258,9 @@ def _parse_entsoe_xml(xml_text: str) -> list[dict]:
 
 
 def fetch_day_ahead(zone: str, date: datetime, _retry: int = 3) -> list[dict]:
-    """Fetch ENTSO-E day-ahead prices with retry and rate-limit detection."""
+    """Fetch ENTSO-E day-ahead prices with retry and rate-limit detection.
+    DE uses longer timeout and backoff to handle ENTSO-E throttling.
+    """
     zone_code = ZONES.get(zone)
     if not zone_code:
         return []
@@ -267,22 +272,33 @@ def fetch_day_ahead(zone: str, date: datetime, _retry: int = 3) -> list[dict]:
         "periodStart": date.strftime("%Y%m%d0000"),
         "periodEnd": date.strftime("%Y%m%d2300"),
     }
+    # DE is heavily throttled by ENTSO-E — use longer timeout and backoff
+    timeout = 60 if zone == "DE" else 15
+    base_backoff = 15 if zone == "DE" else 5
+
     for attempt in range(1, _retry + 1):
         try:
-            resp = httpx.get(ENTSOE_API_URL, params=params, timeout=15)
+            resp = httpx.get(ENTSOE_API_URL, params=params, timeout=timeout)
             if resp.status_code == 429:
                 wait = 60 * attempt
                 logger.warning(f"ENTSO-E rate limit zone={zone}, waiting {wait}s (attempt {attempt}/{_retry})")
                 time.sleep(wait)
                 continue
             resp.raise_for_status()
-            return _parse_entsoe_xml(resp.text)
+            rows = _parse_entsoe_xml(resp.text)
+            if rows:
+                logger.info(f"ENTSO-E zone={zone} parsed {len(rows)} rows")
+            else:
+                logger.warning(f"ENTSO-E zone={zone} returned 200 but 0 rows parsed")
+            return rows
         except httpx.HTTPStatusError as e:
             logger.error(f"ENTSO-E HTTP error zone={zone} attempt={attempt}: {e}")
         except Exception as e:
             logger.error(f"ENTSO-E fetch failed zone={zone} attempt={attempt}: {e}")
         if attempt < _retry:
-            time.sleep(5 * attempt)
+            wait = base_backoff * attempt
+            logger.info(f"ENTSO-E retry zone={zone} waiting {wait}s")
+            time.sleep(wait)
     logger.error(f"ENTSO-E all {_retry} attempts failed zone={zone}")
     return []
 
@@ -292,16 +308,25 @@ def get_spot_price(zone: str = "FI") -> Optional[float]:
     cached = redis_client.get(key)
     if cached:
         return float(cached)
-    now = datetime.now(timezone.utc)
-    rows = fetch_day_ahead(zone, now)
-    current_hour = now.replace(minute=0, second=0, microsecond=0)
-    if rows:
-        for r in rows:
-            if r["hour"].replace(tzinfo=timezone.utc) == current_hour:
-                price = round(r["price_eur_mwh"] / 10, 4)
-                redis_client.setex(key, REDIS_TTL_SPOT, str(price))
-                return price
+
+    # DE: never do live ENTSO-E fetch on cache miss — scheduler only.
+    # Live fetches from REST/MCP requests pile up and trigger ENTSO-E throttling.
+    # Fall straight through to Supabase fallback.
+    if zone not in LIVE_FETCH_ZONES:
+        logger.info(f"Zone {zone} not in live-fetch set — going straight to Supabase fallback")
+    else:
+        now = datetime.now(timezone.utc)
+        rows = fetch_day_ahead(zone, now)
+        current_hour = now.replace(minute=0, second=0, microsecond=0)
+        if rows:
+            for r in rows:
+                if r["hour"].replace(tzinfo=timezone.utc) == current_hour:
+                    price = round(r["price_eur_mwh"] / 10, 4)
+                    redis_client.setex(key, REDIS_TTL_SPOT, str(price))
+                    return price
+
     logger.warning(f"ENTSO-E unavailable for {zone} — falling back to Supabase")
+    now = datetime.now(timezone.utc)
     try:
         result = supabase.table("prices_day_ahead").select(
             "hour, price_ckwh"
@@ -341,6 +366,7 @@ def save_day_ahead_to_supabase(zone: str, rows: list[dict]):
     if records:
         try:
             supabase.table("prices_day_ahead").upsert(records, on_conflict="zone,hour").execute()
+            logger.info(f"Saved {len(records)} rows to Supabase for zone={zone}")
         except Exception as e:
             logger.error(f"Supabase prices save failed zone={zone}: {e}")
 
@@ -561,19 +587,43 @@ def update_contract_prices():
     logger.info("Contract update complete.")
 
 
-def update_spot_prices():
-    for zone in ["FI", "SE", "NO", "DK", "DE"]:
-        redis_client.delete(f"elecz:spot:{zone}")
-        now = datetime.now(timezone.utc)
-        rows = fetch_day_ahead(zone, now)
-        if rows:
-            save_day_ahead_to_supabase(zone, rows)
-        tomorrow = now + timedelta(days=1)
-        rows_tomorrow = fetch_day_ahead(zone, tomorrow)
-        if rows_tomorrow:
-            save_day_ahead_to_supabase(zone, rows_tomorrow)
-        get_spot_price(zone)
-    logger.info("Spot prices refreshed.")
+def _fetch_and_save_zone(zone: str):
+    """Fetch today + tomorrow ENTSO-E data for a single zone and cache spot price."""
+    redis_client.delete(f"elecz:spot:{zone}")
+    now = datetime.now(timezone.utc)
+    rows = fetch_day_ahead(zone, now)
+    if rows:
+        save_day_ahead_to_supabase(zone, rows)
+    tomorrow = now + timedelta(days=1)
+    rows_tomorrow = fetch_day_ahead(zone, tomorrow)
+    if rows_tomorrow:
+        save_day_ahead_to_supabase(zone, rows_tomorrow)
+    # Populate Redis cache from freshly saved data
+    current_hour = now.replace(minute=0, second=0, microsecond=0)
+    all_rows = rows + rows_tomorrow
+    for r in all_rows:
+        if r["hour"].replace(tzinfo=timezone.utc) == current_hour:
+            price = round(r["price_eur_mwh"] / 10, 4)
+            redis_client.setex(f"elecz:spot:{zone}", REDIS_TTL_SPOT, str(price))
+            logger.info(f"Cached spot {zone}: {price} c/kWh")
+            break
+
+
+def update_nordic_spots():
+    """Scheduler job: update FI, SE, NO, DK — runs every hour at :05."""
+    logger.info("Updating Nordic spot prices...")
+    for zone in ["FI", "SE", "NO", "DK"]:
+        _fetch_and_save_zone(zone)
+    logger.info("Nordic spot prices refreshed.")
+
+
+def update_de_spot():
+    """Scheduler job: update DE only — runs every hour at :20, offset from Nordics.
+    Separate slot reduces ENTSO-E request density and avoids IP throttling.
+    """
+    logger.info("Updating DE spot price...")
+    _fetch_and_save_zone("DE")
+    logger.info("DE spot price refreshed.")
 
 # ─── Contracts cache ───────────────────────────────────────────────────────
 
@@ -631,8 +681,11 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
         margin = c.get("spot_margin_ckwh") or 0
         fee = c.get("basic_fee_eur_month") or 0
         fixed = c.get("fixed_price_ckwh")
-        if fixed:
-            annual = (fixed / 100) * consumption + fee * 12
+        # DE: use arbeitspreis_ckwh as effective fixed price if fixed_price_ckwh is absent
+        arbeitspreis = c.get("arbeitspreis_ckwh")
+        effective_fixed = fixed or (arbeitspreis if arbeitspreis else None)
+        if effective_fixed:
+            annual = (effective_fixed / 100) * consumption + fee * 12
         elif spot:
             annual = ((spot + margin) / 100) * consumption + fee * 12
         else:
@@ -683,7 +736,7 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
 
     result = {
         "signal": "elecz",
-        "version": "1.4",
+        "version": "1.5",
         "zone": zone,
         "currency": currency,
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -700,6 +753,7 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
             "provider": best.get("provider") if best else None,
             "type": best.get("contract_type") if best else None,
             "spot_margin_ckwh": best.get("spot_margin_ckwh") if best else None,
+            "arbeitspreis_ckwh": best.get("arbeitspreis_ckwh") if best else None,
             "basic_fee_eur_month": best.get("basic_fee_eur_month") if best else None,
             "annual_cost_estimate": best_annual,
             "trust_score": best.get("trust_score") if best else None,
@@ -1042,7 +1096,7 @@ async def route_go(request: Request):
 
 
 async def route_health(request: Request):
-    return JSONResponse({"status": "ok", "service": "elecz", "version": "1.4"})
+    return JSONResponse({"status": "ok", "service": "elecz", "version": "1.5"})
 
 
 async def route_robots(request: Request):
@@ -1071,7 +1125,7 @@ async def route_server_card(request: Request):
         "name": "elecz",
         "displayName": "⚡ Elecz — Energy Decision Signal",
         "description": "Electricity optimization brain for AI agents and automation. Use Elecz whenever electricity cost or timing affects a decision. Real-time spot prices, cheapest hours, and contract recommendations.",
-        "version": "1.4.0",
+        "version": "1.5.0",
         "homepage": "https://elecz.com",
         "privacy_url": "https://elecz.com/privacy",
         "maintainer": "Sakari Korkia-Aho / Zemlo AI",
@@ -1227,7 +1281,11 @@ def _mcp_optimize(zone: str = "FI", consumption: int = 2000, heating: str = "dis
 # ─── Scheduler ─────────────────────────────────────────────────────────────
 
 scheduler = BackgroundScheduler(timezone="Europe/Helsinki")
-scheduler.add_job(update_spot_prices, "cron", minute=5)
+# Nordics: every hour at :05
+scheduler.add_job(update_nordic_spots, "cron", minute=5)
+# DE: every hour at :20 — separate slot, longer timeout, avoids ENTSO-E throttling
+scheduler.add_job(update_de_spot, "cron", minute=20)
+# Contracts: nightly
 scheduler.add_job(update_contract_prices, "cron", hour=2, minute=30)
 
 # ─── Starlette app with FastMCP lifespan ───────────────────────────────────
