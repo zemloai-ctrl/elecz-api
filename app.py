@@ -285,6 +285,8 @@ def fetch_day_ahead(zone: str, date: datetime, _retry: int = 3) -> list[dict]:
                 time.sleep(wait)
                 continue
             resp.raise_for_status()
+            if zone == "DE":
+                logger.info(f"ENTSO-E DE raw XML: {resp.text[:800]}")
             rows = _parse_entsoe_xml(resp.text)
             if rows:
                 logger.info(f"ENTSO-E zone={zone} parsed {len(rows)} rows")
