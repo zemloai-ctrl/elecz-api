@@ -189,6 +189,13 @@ ZONE_UNIT_LOCAL = {
     "DKK": "ore/kWh",
 }
 
+ZONE_COUNTRY = {
+    "FI": "Finland", "SE": "Sweden", "SE1": "Sweden", "SE2": "Sweden", "SE3": "Sweden", "SE4": "Sweden",
+    "NO": "Norway", "NO1": "Norway", "NO2": "Norway", "NO3": "Norway", "NO4": "Norway", "NO5": "Norway",
+    "DK": "Denmark", "DK1": "Denmark", "DK2": "Denmark",
+    "DE": "Germany",
+}
+
 # ─── Clients ───────────────────────────────────────────────────────────────
 
 supabase: Client = create_client(
@@ -203,13 +210,25 @@ ENTSOE_TOKEN = os.environ["ENTSOE_SECURITY_TOKEN"]
 
 # ─── Analytics ─────────────────────────────────────────────────────────────
 
-def log_mcp_call(tool_name: str, zone: str = None, user_agent: str = None):
-    """Log API and MCP tool calls with optional user-agent for caller identification."""
+def log_api_call(tool_name: str, call_type: str = "rest", zone: str = None, ip: str = None):
+    """Log all API and MCP calls to api_calls table with call_type, ip_prefix and country_hint."""
+    ip_prefix = None
+    if ip:
+        parts = ip.split(".")
+        if len(parts) == 4:
+            ip_prefix = ".".join(parts[:3])
+        elif ":" in ip:
+            ip_prefix = ip[:18]
+
+    country_hint = ZONE_COUNTRY.get(zone.upper(), None) if zone else None
+
     try:
-        supabase.table("mcp_calls").insert({
+        supabase.table("api_calls").insert({
+            "call_type": call_type,
             "tool_name": tool_name,
             "zone": zone,
-            "user_agent": user_agent,
+            "ip_prefix": ip_prefix,
+            "country_hint": country_hint,
             "called_at": datetime.now(timezone.utc).isoformat(),
         }).execute()
     except Exception as e:
@@ -299,7 +318,6 @@ def get_spot_price(zone: str = "FI") -> Optional[float]:
 
 
 def save_day_ahead_to_supabase(zone: str, rows: list[dict]):
-    # Deduplicate by hour to avoid ON CONFLICT errors when ENTSO-E returns duplicate rows
     seen = set()
     unique_rows = []
     for r in rows:
@@ -418,7 +436,6 @@ def get_cheapest_hours(zone: str, n_hours: int = 5, window_h: int = 24) -> dict:
 
 
 def _best_consecutive_window(rows: list, window: int) -> Optional[dict]:
-    """Find the best consecutive window in chronologically sorted rows."""
     if len(rows) < window:
         return None
     best_avg, best_start, best_end = float("inf"), None, None
@@ -447,7 +464,6 @@ def _consumption_recommendation(state: str) -> str:
 def scrape_provider(provider: str, url: str, zone: str) -> Optional[dict]:
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    # DE-spesifinen prompti
     if zone == "DE":
         prompt = f"""
 Search for the current electricity contract pricing from this provider: {url}
@@ -471,15 +487,16 @@ Return ONLY a valid JSON object with no markdown, no explanation:
   "contract_duration_months": <int or null>,
   "new_customers_only": <bool>,
   "below_wholesale": <bool>,
-  "price_includes_tax": <bool>,
   "is_spot": <bool>,
   "is_fixed": <bool>,
+  "price_includes_tax": <bool>,
   "grundpreis_unit": "eur_month" | "eur_year",
   "preisgarantie": "full" | "partial" | "none",
   "reliability": "high" | "medium" | "low",
   "scraped_at": "{now_iso}"
 }}
-Note: arbeitspreis_ckwh must be between 5 and 100 ct/kWh. If value seems to be in EUR/kWh, multiply by 100. is_spot=true if contract tracks exchange spot price. is_fixed=true if price is fixed for the contract duration.
+Note: arbeitspreis_ckwh must be between 5 and 100 ct/kWh. If value seems to be in EUR/kWh, multiply by 100.
+is_spot=true if contract tracks exchange spot price. is_fixed=true if price is fixed for the contract duration.
 """
     else:
         prompt = f"""
@@ -508,12 +525,10 @@ Return ONLY a valid JSON object with no markdown, no explanation:
         data = json.loads(text)
         data["scraped_at"] = now_iso
 
-        # Range-validointi: jos arbeitspreis näyttää olevan EUR/kWh eikä ct/kWh
         if data.get("arbeitspreis_ckwh") and data["arbeitspreis_ckwh"] > 100:
             logger.warning(f"arbeitspreis_ckwh={data['arbeitspreis_ckwh']} looks like EUR/kWh, dividing by 100")
             data["arbeitspreis_ckwh"] = round(data["arbeitspreis_ckwh"] / 100, 4)
 
-        # Hylkää epärealistiset arvot
         if data.get("arbeitspreis_ckwh") and data["arbeitspreis_ckwh"] < 5:
             logger.warning(f"arbeitspreis_ckwh={data['arbeitspreis_ckwh']} too low, flagging data_errors")
             data["data_errors"] = True
@@ -642,12 +657,10 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
     else:
         energy_state = "unknown"
 
-    # Boolean helpers
     is_good_time_to_use_energy = energy_state in ("cheap", "negative")
 
     best_annual = best.get("annual_cost_estimate") if best else None
 
-    # Savings: difference between most expensive and cheapest listed contract
     if best_annual:
         worst = ranked[-1] if ranked else None
         worst_annual = worst.get("annual_cost_estimate") if worst else None
@@ -660,7 +673,6 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
     should_switch = bool(savings_eur_year and savings_eur_year > 0)
     switch_recommended = should_switch
 
-    # Synkronoi decision_hint ja action.status
     raw_hint = hint.get("hint")
     raw_reason = hint.get("reason")
     if switch_recommended and raw_hint == "compare_options":
@@ -715,7 +727,6 @@ def build_signal(zone: str, consumption: int, postcode: str, heating: str) -> di
 # ─── Starlette route handlers ──────────────────────────────────────────────
 
 async def route_index(request: Request):
-    # DE spot haetaan vain jos se on jo Redisissä — ei ENTSO-E-kutsua joka health checkillä
     de_cached = redis_client.get("elecz:spot:DE")
     de_price = float(de_cached) if de_cached else None
 
@@ -860,13 +871,13 @@ async def route_privacy(request: Request):
   <ul>
     <li>The API endpoint and query parameters (e.g. zone=FI)</li>
     <li>Timestamp of the request</li>
-    <li>IP address (via standard server logs)</li>
+    <li>IP address prefix (first 3 octets only, e.g. 160.79.106)</li>
     <li>User-agent string</li>
   </ul>
 
   <h2>What we do not collect</h2>
   <p>We do not collect personal information, names, email addresses, or any data that identifies individual users.
-  We do not set cookies. We do not use tracking pixels or advertising networks.</p>
+  We do not store full IP addresses. We do not set cookies. We do not use tracking pixels or advertising networks.</p>
 
   <h2>How we use data</h2>
   <p>Logged data is used solely for service monitoring, debugging, and aggregate usage analytics
@@ -904,15 +915,13 @@ async def route_signal(request: Request):
     heating = request.query_params.get("heating", "district")
     if zone not in ZONES:
         return JSONResponse({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}, status_code=400)
-    ua = request.headers.get("user-agent", "unknown")
-    log_mcp_call("rest:signal", zone, ua)
+    log_api_call("rest:signal", call_type="rest", zone=zone, ip=request.client.host)
     return JSONResponse(build_signal(zone, consumption, postcode, heating))
 
 
 async def route_signal_spot(request: Request):
     zone = request.query_params.get("zone", "FI").upper()
-    ua = request.headers.get("user-agent", "unknown")
-    log_mcp_call("rest:spot", zone, ua)
+    log_api_call("rest:spot", call_type="rest", zone=zone, ip=request.client.host)
     price = get_spot_price(zone)
     currency = ZONE_CURRENCY.get(zone, "EUR")
     unit_local = ZONE_UNIT_LOCAL.get(currency, "c/kWh")
@@ -935,8 +944,7 @@ async def route_signal_optimize(request: Request):
     heating = request.query_params.get("heating", "district")
     if zone not in ZONES:
         return JSONResponse({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}, status_code=400)
-    ua = request.headers.get("user-agent", "unknown")
-    log_mcp_call("rest:optimize", zone, ua)
+    log_api_call("rest:optimize", call_type="rest", zone=zone, ip=request.client.host)
 
     sig = build_signal(zone, consumption, "00100", heating)
     cheapest = get_cheapest_hours(zone, 3, 24)
@@ -1007,8 +1015,7 @@ async def route_signal_cheapest_hours(request: Request):
     window = int(request.query_params.get("window", 24))
     if zone not in ZONES:
         return JSONResponse({"error": f"Invalid zone. Valid: {list(ZONES.keys())}"}, status_code=400)
-    ua = request.headers.get("user-agent", "unknown")
-    log_mcp_call("rest:cheapest_hours", zone, ua)
+    log_api_call("rest:cheapest_hours", call_type="rest", zone=zone, ip=request.client.host)
     return JSONResponse(get_cheapest_hours(zone, hours, window))
 
 
@@ -1119,7 +1126,7 @@ def _mcp_spot(zone: str = "FI") -> str:
         zone: Bidding zone. FI=Finland, SE=Sweden, NO=Norway, DK=Denmark, DE=Germany.
               Sub-zones: SE1-SE4, NO1-NO5, DK1-DK2.
     """
-    log_mcp_call("spot_price", zone.upper())
+    log_api_call("spot_price", call_type="mcp", zone=zone.upper())
     price = get_spot_price(zone.upper())
     currency = ZONE_CURRENCY.get(zone.upper(), "EUR")
     return json.dumps({
@@ -1147,7 +1154,7 @@ def _mcp_cheapest(zone: str = "FI", hours: int = 5, window: int = 24) -> str:
         hours: Number of cheapest hours to return (default 5).
         window: Hours to look ahead (default 24).
     """
-    log_mcp_call("cheapest_hours", zone.upper())
+    log_api_call("cheapest_hours", call_type="mcp", zone=zone.upper())
     return json.dumps(get_cheapest_hours(zone.upper(), hours, window), ensure_ascii=False)
 
 
@@ -1166,7 +1173,7 @@ def _mcp_signal(zone: str = "FI", consumption: int = 2000, heating: str = "distr
         consumption: Annual electricity consumption in kWh (default 2000).
         heating: Heating type: district or electric (default district).
     """
-    log_mcp_call("energy_decision_signal", zone.upper())
+    log_api_call("energy_decision_signal", call_type="mcp", zone=zone.upper())
     return json.dumps(build_signal(zone.upper(), consumption, "00100", heating), ensure_ascii=False)
 
 
@@ -1185,7 +1192,7 @@ def _mcp_contract(zone: str = "FI", consumption: int = 2000, heating: str = "dis
         consumption: Annual electricity consumption in kWh (default 2000).
         heating: Heating type: district or electric (default district).
     """
-    log_mcp_call("best_energy_contract", zone.upper())
+    log_api_call("best_energy_contract", call_type="mcp", zone=zone.upper())
     data = build_signal(zone.upper(), consumption, "00100", heating)
     action = data.get("action", {})
     best = data.get("best_contract", {})
@@ -1213,7 +1220,7 @@ def _mcp_optimize(zone: str = "FI", consumption: int = 2000, heating: str = "dis
         consumption: Annual electricity consumption in kWh (default 2000).
         heating: Heating type: district or electric (default district).
     """
-    log_mcp_call("optimize", zone.upper())
+    log_api_call("optimize", call_type="mcp", zone=zone.upper())
     data = build_signal(zone.upper(), consumption, "00100", heating)
     return json.dumps(data, ensure_ascii=False)
 
