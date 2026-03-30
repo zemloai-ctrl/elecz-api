@@ -44,9 +44,6 @@ REDIS_TTL_FX = 86400
 ABNORMAL_PRICE_HIGH = 300.0   # EUR/MWh — hintapiikki
 ABNORMAL_PRICE_LOW  = -50.0   # EUR/MWh — negatiivinen ääriarvo
 
-# Zones that use live ENTSO-E fetch on cache miss (DE excluded — scheduler only)
-LIVE_FETCH_ZONES = {"FI", "SE", "SE1", "SE2", "SE3", "SE4", "NO", "NO1", "NO2", "NO3", "NO4", "NO5", "DK", "DK1", "DK2"}
-
 # Default annual consumption by market (kWh)
 # DE: saksalainen kotitalous ~3500 kWh, pohjoismainen ~2000 kWh
 DEFAULT_CONSUMPTION = {
@@ -269,6 +266,8 @@ def _parse_entsoe_xml(xml_text: str) -> list[dict]:
 
 def fetch_day_ahead(zone: str, date: datetime, _retry: int = 3) -> list[dict]:
     """Fetch ENTSO-E day-ahead prices with retry and rate-limit detection.
+    Called only from scheduler — never from hot path / API requests.
+    time.sleep() is safe here because this runs in BackgroundScheduler threads, not async event loop.
     DE uses longer timeout and backoff to handle ENTSO-E throttling.
     """
     zone_code = ZONES.get(zone)
@@ -316,28 +315,16 @@ def fetch_day_ahead(zone: str, date: datetime, _retry: int = 3) -> list[dict]:
 
 
 def get_spot_price(zone: str = "FI") -> Optional[float]:
+    """Hot path: Redis → Supabase only. Scheduler handles all ENTSO-E fetches.
+    Never calls ENTSO-E directly — avoids blocking event loop and throttling."""
     key = f"elecz:spot:{zone}"
     cached = redis_client.get(key)
     if cached:
         return float(cached)
 
-    # DE: never do live ENTSO-E fetch on cache miss — scheduler only.
-    # Live fetches from REST/MCP requests pile up and trigger ENTSO-E throttling.
-    # Fall straight through to Supabase fallback.
-    if zone not in LIVE_FETCH_ZONES:
-        logger.info(f"Zone {zone} not in live-fetch set — going straight to Supabase fallback")
-    else:
-        now = datetime.now(timezone.utc)
-        rows = fetch_day_ahead(zone, now)
-        current_hour = now.replace(minute=0, second=0, microsecond=0)
-        if rows:
-            for r in rows:
-                if r["hour"].replace(tzinfo=timezone.utc) == current_hour:
-                    price = round(r["price_eur_mwh"] / 10, 4)
-                    redis_client.setex(key, REDIS_TTL_SPOT, str(price))
-                    return price
-
-    logger.warning(f"ENTSO-E unavailable for {zone} — falling back to Supabase")
+    # No live ENTSO-E fetch here — scheduler populates Redis every hour.
+    # Fall straight to Supabase for most recent stored price.
+    logger.info(f"Redis miss zone={zone} — falling back to Supabase")
     now = datetime.now(timezone.utc)
     try:
         result = supabase.table("prices_day_ahead").select(
@@ -567,7 +554,11 @@ Return ONLY a valid JSON object with no markdown, no explanation:
         response = gemini_model.generate_content(prompt)
         text = re.sub(r"^```(?:json)?\s*", "", response.text.strip())
         text = re.sub(r"\s*```$", "", text).strip()
-        data = json.loads(text)
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as je:
+            logger.error(f"Invalid JSON from Gemini {zone}/{provider}: {je} — raw: {text[:300]}")
+            return None
         data["scraped_at"] = now_iso
 
         if data.get("arbeitspreis_ckwh") and data["arbeitspreis_ckwh"] > 100:
@@ -1256,7 +1247,7 @@ class _CheapestInput(PydanticBaseModel):
     window: int = PydanticField(default=24, ge=1, le=48, description="Hours to look ahead")
 
 
-@elecz_mcp.tool(name="spot_price")
+@elecz_mcp.tool(name="spot_price", annotations={"readOnlyHint": True})
 def _mcp_spot(zone: str = "FI") -> str:
     """Get current electricity spot price for a Nordic or German zone.
 
@@ -1283,7 +1274,7 @@ def _mcp_spot(zone: str = "FI") -> str:
     }, ensure_ascii=False)
 
 
-@elecz_mcp.tool(name="cheapest_hours")
+@elecz_mcp.tool(name="cheapest_hours", annotations={"readOnlyHint": True})
 def _mcp_cheapest(zone: str = "FI", hours: int = 5, window: int = 24) -> str:
     """Get cheapest electricity hours in the next 24 hours.
 
@@ -1302,7 +1293,7 @@ def _mcp_cheapest(zone: str = "FI", hours: int = 5, window: int = 24) -> str:
     return json.dumps(get_cheapest_hours(zone.upper(), hours, window), ensure_ascii=False)
 
 
-@elecz_mcp.tool(name="energy_decision_signal")
+@elecz_mcp.tool(name="energy_decision_signal", annotations={"readOnlyHint": True})
 def _mcp_signal(zone: str = "FI", consumption: Optional[int] = None, heating: str = "district") -> str:
     """Get full energy decision signal for a Nordic or German zone.
 
@@ -1325,7 +1316,7 @@ def _mcp_signal(zone: str = "FI", consumption: Optional[int] = None, heating: st
     return json.dumps(build_signal(zone, consumption, "00100", heating), ensure_ascii=False)
 
 
-@elecz_mcp.tool(name="best_energy_contract")
+@elecz_mcp.tool(name="best_energy_contract", annotations={"readOnlyHint": True})
 def _mcp_contract(zone: str = "FI", consumption: Optional[int] = None, heating: str = "district") -> str:
     """Find top 3 cheapest electricity contracts for a given consumption profile.
 
@@ -1360,7 +1351,7 @@ def _mcp_contract(zone: str = "FI", consumption: Optional[int] = None, heating: 
     }, ensure_ascii=False)
 
 
-@elecz_mcp.tool(name="optimize")
+@elecz_mcp.tool(name="optimize", annotations={"readOnlyHint": True})
 def _mcp_optimize(zone: str = "FI", consumption: Optional[int] = None, heating: str = "district") -> str:
     """One-call electricity optimization. Returns single primary action.
 
@@ -1380,7 +1371,20 @@ def _mcp_optimize(zone: str = "FI", consumption: Optional[int] = None, heating: 
         consumption = DEFAULT_CONSUMPTION.get(zone, 2000)
     log_api_call("optimize", call_type="mcp", zone=zone)
     data = build_signal(zone, consumption, "00100", heating)
-    return json.dumps(data, ensure_ascii=False)
+    action = data.get("action", {})
+    # Returns only the primary action — use energy_decision_signal for full signal
+    return json.dumps({
+        "zone": data.get("zone"),
+        "action": action.get("type", "monitor"),
+        "is_good_time_to_use_energy": data.get("is_good_time_to_use_energy"),
+        "energy_state": data.get("energy_state"),
+        "spot_price": data.get("spot_price"),
+        "switch_recommended": data.get("switch_recommended"),
+        "expected_savings_eur_year": action.get("expected_savings_eur_year"),
+        "action_link": action.get("action_link"),
+        "decision_hint": data.get("decision_hint"),
+        "powered_by": data.get("powered_by"),
+    }, ensure_ascii=False)
 
 # ─── Scheduler ─────────────────────────────────────────────────────────────
 
