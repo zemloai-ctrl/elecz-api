@@ -964,7 +964,8 @@ async def route_index(request: Request):
     ⚡ Elecz.com — Energy Decision Signal API · Powered by ENTSO-E · Nordic + DE markets<br>
     Maintained by <a href="mailto:sakke@zemloai.com">Sakari Korkia-Aho / Zemlo AI</a> ·
     <a href="/docs">Documentation</a> ·
-    <a href="/privacy">Privacy Policy</a>
+    <a href="/privacy">Privacy Policy</a> ·
+    <a href="/terms">Terms of Service</a>
   </p>
 </body>
 </html>"""
@@ -1233,6 +1234,76 @@ automation:
     <a href="/privacy" style="color:#333;">Privacy Policy</a>
   </p>
 
+</body>
+</html>"""
+    return HTMLResponse(html)
+
+
+async def route_terms(request: Request):
+    html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Terms of Service — Elecz.com</title>
+  <style>
+    body { font-family: monospace; background: #0a0a0a; color: #e0e0e0; max-width: 700px; margin: 40px auto; padding: 20px; }
+    h1 { color: #f0c040; }
+    h2 { color: #80c0ff; margin-top: 32px; }
+    a { color: #40ff80; }
+    p, li { line-height: 1.7; }
+    ul { padding-left: 20px; }
+  </style>
+</head>
+<body>
+  <h1>⚡ Elecz.com — Terms of Service</h1>
+  <p>Last updated: March 2026</p>
+
+  <h2>1. Service</h2>
+  <p>Elecz is operated by Sakari Korkia-Aho / Zemlo AI, Kokkola, Finland.
+  Elecz provides real-time electricity price signals, cheapest hour calculations, and contract recommendations
+  via a public REST API and MCP server. The service is provided free of charge.</p>
+
+  <h2>2. Use of the service</h2>
+  <p>You may use Elecz for personal, commercial, or automated purposes. You agree not to:</p>
+  <ul>
+    <li>Abuse the API with excessive requests that degrade service for others</li>
+    <li>Misrepresent Elecz data as your own proprietary data</li>
+    <li>Use the service for unlawful purposes</li>
+  </ul>
+
+  <h2>3. Data accuracy</h2>
+  <p>Electricity price data is sourced from ENTSO-E Transparency Platform and updated hourly.
+  Contract data is scraped periodically and may not reflect real-time provider pricing.
+  Elecz provides information signals — final decisions remain with the user.
+  We make no warranties regarding the accuracy, completeness, or fitness for purpose of the data.</p>
+
+  <h2>4. No financial advice</h2>
+  <p>Elecz provides informational signals only. Nothing in the service constitutes financial,
+  legal, or contractual advice. Users are responsible for verifying contract terms directly
+  with electricity providers before making any decisions.</p>
+
+  <h2>5. Liability</h2>
+  <p>Elecz is provided "as is" without warranty of any kind. Zemlo AI is not liable for
+  any damages arising from use of or inability to use the service, including but not limited
+  to decisions made based on Elecz signals.</p>
+
+  <h2>6. Third-party links</h2>
+  <p>Elecz may provide links to electricity provider websites. We are not responsible for
+  the content, pricing, or terms of those third-party services.</p>
+
+  <h2>7. Changes</h2>
+  <p>We may update these terms at any time. Continued use of the service constitutes
+  acceptance of the updated terms.</p>
+
+  <h2>8. Contact</h2>
+  <p>Questions: <a href="mailto:sakke@zemloai.com">sakke@zemloai.com</a></p>
+
+  <p style="margin-top:60px; color:#555; font-size:0.8em;">
+    ⚡ Elecz.com · Zemlo AI · Kokkola, Finland ·
+    <a href="/" style="color:#555;">Back to home</a> ·
+    <a href="/privacy" style="color:#555;">Privacy Policy</a>
+  </p>
 </body>
 </html>"""
     return HTMLResponse(html)
@@ -1617,6 +1688,7 @@ routes = [
     Route("/", route_index),
     Route("/docs", route_docs),
     Route("/privacy", route_privacy),
+    Route("/terms", route_terms),
     Route("/signal", route_signal),
     Route("/signal/spot", route_signal_spot),
     Route("/signal/optimize", route_signal_optimize),
