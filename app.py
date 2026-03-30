@@ -1214,6 +1214,15 @@ automation:
   <h2>Data Sources</h2>
   <p>Spot prices from <strong>ENTSO-E</strong> Transparency Platform, updated hourly. Contract prices scraped nightly. Currency conversion via Frankfurter API. Cached in Redis, stored in Supabase (EU region).</p>
 
+  <h2>Roadmap</h2>
+  <ul>
+    <li>✅ Q1 2026: Nordic markets live (FI, SE, NO, DK)</li>
+    <li>✅ Q1 2026: Germany live (DE) — 12 providers, ENTSO-E spot, Arbeitspreis ranking</li>
+    <li>🔜 Q2 2026: United Kingdom (GB)</li>
+    <li>🔜 Q2–Q3 2026: Rest of Europe — one market at a time</li>
+    <li>🔜 Q4 2026: Australia, New Zealand, United States</li>
+  </ul>
+
   <h2>Support</h2>
   <p>Questions, integrations, or issues: <a href="mailto:sakke@zemloai.com">sakke@zemloai.com</a></p>
 
