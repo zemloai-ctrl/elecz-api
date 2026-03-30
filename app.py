@@ -963,6 +963,7 @@ async def route_index(request: Request):
   <p style="color:#333; margin-top:60px; font-size:0.8em;">
     ⚡ Elecz.com — Energy Decision Signal API · Powered by ENTSO-E · Nordic + DE markets<br>
     Maintained by <a href="mailto:sakke@zemloai.com">Sakari Korkia-Aho / Zemlo AI</a> ·
+    <a href="/docs">Documentation</a> ·
     <a href="/privacy">Privacy Policy</a>
   </p>
 </body>
