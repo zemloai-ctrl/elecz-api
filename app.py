@@ -7,6 +7,7 @@ Maintained by Sakari Korkia-Aho / Zemlo AI — Kokkola, Finland
 """
 
 import os
+import re
 import json
 import time
 import logging
@@ -481,8 +482,10 @@ def _best_consecutive_window(rows: list, window: int) -> Optional[dict]:
         if avg < best_avg:
             best_avg = avg
             best_start = rows[i]["hour"][:16]
+            # end = start of last hour in window (not past it — window covers hours [i..i+window-1])
             best_end = rows[i + window - 1]["hour"][:16]
-    return {"start": best_start, "end": best_end, "avg_price_eur": round(best_avg, 4)}
+    return {"start": best_start, "end": best_end, "avg_price_eur": round(best_avg, 4),
+            "note": "end is the start of the last cheap hour in the window"}
 
 
 def _expensive_hours(rows: list, avg: float) -> list[str]:
@@ -562,7 +565,8 @@ Return ONLY a valid JSON object with no markdown, no explanation:
 """
     try:
         response = gemini_model.generate_content(prompt)
-        text = response.text.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
+        text = re.sub(r"^```(?:json)?\s*", "", response.text.strip())
+        text = re.sub(r"\s*```$", "", text).strip()
         data = json.loads(text)
         data["scraped_at"] = now_iso
 
@@ -704,7 +708,9 @@ def _annual_cost(contract: dict, spot: Optional[float], consumption: int) -> Opt
     # Dynamic contracts (Tibber DE): use spot as proxy if no fixed arbeitspreis available
     if contract_type == "dynamic" and not arbeitspreis and spot:
         # Dynamic = spot price, no fixed margin — use spot as current cost estimate
-        return round((spot / 100) * consumption + fee * 12, 2)
+        # Floor at 0 — negative spot gives free energy but not negative cost
+        effective_spot = max(spot, 0.0)
+        return round((effective_spot / 100) * consumption + fee * 12, 2)
 
     effective_fixed = fixed or arbeitspreis
     if effective_fixed:
@@ -1158,15 +1164,16 @@ async def route_signal_cheapest_hours(request: Request):
 
 async def route_go(request: Request):
     provider = request.path_params["provider"]
+    zone = request.query_params.get("zone", "FI").upper()
     try:
         result = supabase.table("contracts").select(
             "provider, affiliate_url, direct_url"
-        ).eq("provider", provider).single().execute()
+        ).eq("provider", provider).eq("zone", zone).single().execute()
         contract = result.data
         url = contract.get("affiliate_url") or contract.get("direct_url")
         supabase.table("clicks").insert({
             "provider": provider,
-            "zone": request.query_params.get("zone", "FI"),
+            "zone": zone,
             "user_agent": request.headers.get("user-agent"),
             "referrer": request.headers.get("referer"),
             "clicked_at": datetime.now(timezone.utc).isoformat(),
@@ -1174,7 +1181,7 @@ async def route_go(request: Request):
         if url:
             return RedirectResponse(url, status_code=302)
     except Exception as e:
-        logger.error(f"Redirect failed {provider}: {e}")
+        logger.error(f"Redirect failed {provider}/{zone}: {e}")
     return JSONResponse({"error": "Provider not found"}, status_code=404)
 
 
