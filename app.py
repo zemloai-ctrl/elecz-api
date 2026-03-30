@@ -1036,6 +1036,198 @@ async def route_privacy(request: Request):
     return HTMLResponse(html)
 
 
+async def route_docs(request: Request):
+    html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Elecz Docs — Electricity Signal API for AI Agents</title>
+  <meta name="description" content="Elecz API documentation. Real-time electricity prices, contract recommendations and cheapest hours for Finland, Sweden, Norway, Denmark and Germany. MCP, REST, Home Assistant, Python.">
+  <style>
+    body { font-family: monospace; background: #0a0a0a; color: #e0e0e0; max-width: 860px; margin: 40px auto; padding: 20px; }
+    h1 { color: #f0c040; font-size: 2em; margin-bottom: 4px; }
+    h2 { color: #80c0ff; margin-top: 48px; border-bottom: 1px solid #222; padding-bottom: 6px; }
+    h3 { color: #f0c040; margin-top: 28px; font-size: 1em; }
+    p, li { line-height: 1.7; }
+    ul { padding-left: 20px; }
+    code { background: #1a1a1a; padding: 2px 6px; border-radius: 4px; color: #f0c040; }
+    pre { background: #1a1a1a; padding: 16px; border-radius: 8px; overflow-x: auto; color: #80ff80; line-height: 1.5; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    td, th { padding: 10px; border: 1px solid #222; text-align: left; }
+    th { color: #80c0ff; background: #111; }
+    .badge { background: #1a3a1a; color: #40ff80; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; margin-right: 6px; }
+    .prompt { background: #0a1a0a; border-left: 3px solid #40ff80; padding: 10px 14px; margin: 8px 0; border-radius: 0 4px 4px 0; color: #c0e0c0; font-style: italic; }
+    .section-label { color: #555; font-size: 0.8em; text-transform: uppercase; letter-spacing: 1px; margin-top: 32px; display: block; }
+    a { color: #80c0ff; text-decoration: none; }
+    a:hover { color: #40ff80; }
+    nav { margin-bottom: 40px; color: #555; font-size: 0.85em; }
+    nav a { color: #555; margin-right: 16px; }
+    nav a:hover { color: #80c0ff; }
+  </style>
+</head>
+<body>
+
+  <h1>⚡ Elecz Docs</h1>
+  <p>Electricity decision signal for AI agents, automation, and developers.</p>
+  <p>
+    <span class="badge">LIVE</span>
+    <span class="badge">FREE</span>
+    <span class="badge">NO API KEY</span>
+  </p>
+
+  <nav>
+    <a href="/">← Home</a>
+    <a href="#connect">Connect</a>
+    <a href="#examples">Examples</a>
+    <a href="#tools">MCP Tools</a>
+    <a href="#api">REST API</a>
+    <a href="#germany">Germany</a>
+    <a href="/privacy">Privacy</a>
+  </nav>
+
+  <h2 id="what">What is Elecz?</h2>
+  <p>Elecz turns hourly ENTSO-E spot prices into actionable decisions — for AI agents, home automation, and anyone whose costs depend on when they use electricity.</p>
+  <p>One call returns: current price, cheapest hours, energy state, top 3 contract recommendations, and a direct action: <code>run_now</code> / <code>delay</code> / <code>switch_contract</code> / <code>monitor</code>.</p>
+  <p><strong>Markets:</strong> Finland · Sweden · Norway · Denmark · Germany</p>
+
+  <h2 id="connect">Connect in 30 seconds</h2>
+
+  <h3>Claude / Claude Code / any MCP client</h3>
+  <pre>{
+  "mcpServers": {
+    "elecz": {
+      "url": "https://elecz.com/mcp"
+    }
+  }
+}</pre>
+
+  <h3>ChatGPT / Copilot (REST)</h3>
+  <pre>GET https://elecz.com/signal/optimize?zone=DE</pre>
+  <p>Works with any tool that can call a REST endpoint — GPT Actions, Copilot plugins, Zapier, n8n, Make.</p>
+
+  <h3>cURL</h3>
+  <pre>curl "https://elecz.com/signal/optimize?zone=FI"</pre>
+
+  <h2 id="examples">Examples</h2>
+
+  <span class="section-label">👤 Consumer</span>
+
+  <h3>Should I switch my electricity contract?</h3>
+  <div class="prompt">"Should I switch my electricity contract? I'm in Finland and use about 3 000 kWh per year."</div>
+  <p>Elecz returns top 3 ranked contracts with annual cost estimates, trust scores, and direct links to switch. If savings exceed zero, <code>switch_recommended: true</code> is set with expected EUR/year savings.</p>
+
+  <h3>When to charge my EV?</h3>
+  <div class="prompt">"When is the cheapest time to charge my electric car tonight in Sweden?"</div>
+  <p>Elecz returns the best 3-hour consecutive window with average price, start and end time — ready to feed directly into a charging schedule or Home Assistant automation.</p>
+
+  <h3>When to run the water heater?</h3>
+  <div class="prompt">"Milloin kannattaa käynnistää lämminvesivaraaja tänä yönä Suomessa?"</div>
+  <p>Cheapest hours endpoint returns sorted hours and the optimal window. Works identically in any language — Elecz signals are language-neutral JSON.</p>
+
+  <h3>How much can I save?</h3>
+  <div class="prompt">"How much could I save annually by switching electricity provider in Norway?"</div>
+  <p>Returns expected savings in NOK/year versus median market price, with the recommended provider and a direct link to switch.</p>
+
+  <span class="section-label">🏢 Business</span>
+
+  <h3>Office contract comparison — Germany</h3>
+  <div class="prompt">"What is the cheapest electricity contract for our office in Germany? We use about 12 000 kWh per year."</div>
+  <p>Pass <code>consumption=12000&zone=DE</code> — Elecz returns top 3 Arbeitspreis-ranked contracts with annual cost at that consumption level. Prices are brutto ct/kWh including MwSt (19%). Regional Netzentgelt not included — it is fixed by your grid operator regardless of provider.</p>
+
+  <h3>Annual savings report</h3>
+  <div class="prompt">"Calculate how much our company could save by switching electricity contracts in Sweden. We consume 25 000 kWh annually."</div>
+  <p>Returns ranked contracts with annual cost estimates and savings versus median provider — ready to include in a cost report or board presentation.</p>
+
+  <h3>Batch job scheduling</h3>
+  <div class="prompt">"When is the cheapest time to run our nightly data processing jobs in Denmark this week?"</div>
+  <p>Cheapest hours endpoint returns the optimal window for the next 24h. Integrate with your scheduler to shift workloads automatically.</p>
+
+  <span class="section-label">🔧 Developer</span>
+
+  <h3>Python — act on price signal</h3>
+  <pre>import httpx
+
+signal = httpx.get("https://elecz.com/signal/optimize?zone=FI").json()
+
+match signal["action"]:
+    case "run_now":
+        run_batch_job()
+    case "delay":
+        schedule_later(signal["spot_price"])
+    case "switch_contract":
+        notify_team(signal["action_link"])</pre>
+  <p>Full schema at <a href="/signal/optimize?zone=FI">/signal/optimize?zone=FI</a>. Build the rest yourself.</p>
+
+  <span class="section-label">🏠 Home Automation</span>
+
+  <h3>Home Assistant</h3>
+  <pre>sensor:
+  - platform: rest
+    name: "Electricity Signal"
+    resource: "https://elecz.com/signal/optimize?zone=FI"
+    value_template: "{{ value_json.action }}"
+    scan_interval: 3600
+
+automation:
+  - alias: "Charge EV at cheapest hours"
+    trigger:
+      platform: state
+      entity_id: sensor.electricity_signal
+      to: "run_now"
+    action:
+      service: switch.turn_on
+      entity_id: switch.ev_charger</pre>
+
+  <h2 id="tools">MCP Tools</h2>
+  <table>
+    <tr><th>Tool</th><th>Description</th><th>Best for</th></tr>
+    <tr><td><code>optimize</code></td><td>Single action: run_now / delay / switch_contract / monitor</td><td>Automation, HA, agents</td></tr>
+    <tr><td><code>spot_price</code></td><td>Current spot price for any zone</td><td>Dashboards, monitoring</td></tr>
+    <tr><td><code>cheapest_hours</code></td><td>Cheapest hours next 24h + best window</td><td>EV charging, scheduling</td></tr>
+    <tr><td><code>best_energy_contract</code></td><td>Top 3 contracts for your consumption profile</td><td>Contract decisions</td></tr>
+    <tr><td><code>energy_decision_signal</code></td><td>Full signal: price + contracts + state + recommendation</td><td>Rich agent responses</td></tr>
+  </table>
+
+  <h2 id="api">REST API</h2>
+  <table>
+    <tr><th>Endpoint</th><th>Description</th></tr>
+    <tr><td><code>GET /signal/optimize?zone=FI</code></td><td>One-call optimization — recommended</td></tr>
+    <tr><td><code>GET /signal?zone=DE&consumption=3500</code></td><td>Full energy decision signal</td></tr>
+    <tr><td><code>GET /signal/spot?zone=NO</code></td><td>Current spot price only</td></tr>
+    <tr><td><code>GET /signal/cheapest-hours?zone=SE&hours=5</code></td><td>Cheapest hours next 24h</td></tr>
+    <tr><td><code>GET /health</code></td><td>Health check</td></tr>
+  </table>
+  <p><strong>Zones:</strong> FI · SE · SE1–SE4 · NO · NO1–NO5 · DK · DK1–DK2 · DE</p>
+  <p><strong>No authentication. No API key. No rate limit for reasonable use.</strong></p>
+
+  <h2 id="germany">🇩🇪 Germany</h2>
+  <p>Elecz vergleicht Stromtarife in Deutschland basierend auf ENTSO-E Spotpreisen und aktuellen Arbeitspreis-Daten von 12 Anbietern.</p>
+  <p><strong>Unterstützte Anbieter:</strong> Tibber · Octopus Energy · E wie Einfach · Yello · E.ON · Vattenfall · EnBW · Naturstrom · LichtBlick · Polarstern · ExtraEnergie · Grünwelt</p>
+  <p><strong>Hinweis:</strong> Preise sind Arbeitspreis brutto ct/kWh inkl. MwSt (19%). Regionales Netzentgelt ist nicht enthalten — es wird vom Netzbetreiber festgelegt und ist unabhängig vom gewählten Anbieter.</p>
+  <pre>GET https://elecz.com/signal/optimize?zone=DE&consumption=3500</pre>
+  <p>Frag deinen KI-Assistenten:</p>
+  <div class="prompt">"Welcher Stromanbieter ist gerade am günstigsten für mich? Ich verbrauche 3 500 kWh im Jahr."</div>
+  <div class="prompt">"Wann ist der Strom heute Nacht am billigsten — wann soll ich mein E-Auto laden?"</div>
+  <div class="prompt">"Lohnt sich ein Wechsel zu Tibber? Wie viel spare ich im Jahr?"</div>
+
+  <h2>Data Sources</h2>
+  <p>Spot prices from <strong>ENTSO-E</strong> Transparency Platform, updated hourly. Contract prices scraped nightly. Currency conversion via Frankfurter API. Cached in Redis, stored in Supabase (EU region).</p>
+
+  <h2>Support</h2>
+  <p>Questions, integrations, or issues: <a href="mailto:sakke@zemloai.com">sakke@zemloai.com</a></p>
+
+  <p style="margin-top:60px; color:#333; font-size:0.8em;">
+    ⚡ Elecz.com · Zemlo AI · Kokkola, Finland ·
+    <a href="/" style="color:#333;">Home</a> ·
+    <a href="/privacy" style="color:#333;">Privacy Policy</a>
+  </p>
+
+</body>
+</html>"""
+    return HTMLResponse(html)
+
+
 async def route_signal(request: Request):
     zone = request.query_params.get("zone", "FI").upper()
     consumption = int(request.query_params.get("consumption", DEFAULT_CONSUMPTION.get(zone, 2000)))
@@ -1413,6 +1605,7 @@ async def lifespan(app):
 
 routes = [
     Route("/", route_index),
+    Route("/docs", route_docs),
     Route("/privacy", route_privacy),
     Route("/signal", route_signal),
     Route("/signal/spot", route_signal_spot),
