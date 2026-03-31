@@ -1,5 +1,7 @@
 # ⚡ Elecz — Energy Decision Signal for AI Agents
 
+[![MCP Badge](https://lobehub.com/badge/mcp/zemloai-ctrl-elecz-api)](https://lobehub.com/mcp/zemloai-ctrl-elecz-api)
+
 Real-time electricity prices, cheapest hours, and contract recommendations for Nordic markets and Germany — in one API call.
 
 ```
