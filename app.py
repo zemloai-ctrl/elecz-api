@@ -1713,6 +1713,9 @@ async def app(scope, receive, send):
         logger.info(f"ASGI: {method} {path}")
 
         if path.startswith("/mcp"):
+            if path.startswith("/mcp"):
+            logger.info(f"MCP headers: {dict(scope.get('headers', []))}")
+        if path == "/mcp":
             if path == "/mcp":
                 scope = dict(scope)
                 scope["path"] = "/mcp/"
