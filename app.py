@@ -1746,7 +1746,7 @@ async def app(scope, receive, send):
                         logger.warning(f"Request intercept failed: {e}")
                 return message
 
-            await mcp_app(scope, wrapped_receive, send)
+            await mcp_app(scope, receive, send)
             return
 
     await _starlette(scope, receive, send)
