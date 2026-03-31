@@ -469,7 +469,6 @@ def _best_consecutive_window(rows: list, window: int) -> Optional[dict]:
         if avg < best_avg:
             best_avg = avg
             best_start = rows[i]["hour"][:16]
-            # end = start of last hour in window (not past it — window covers hours [i..i+window-1])
             best_end = rows[i + window - 1]["hour"][:16]
     return {"start": best_start, "end": best_end, "avg_price_eur": round(best_avg, 4),
             "note": "end is the start of the last cheap hour in the window"}
@@ -669,7 +668,6 @@ def trust_score(contract: dict) -> int:
 
 
 def decision_hint(spot: float, contract: dict, consumption: int, heating: str, zone: str = "FI") -> dict:
-    # DE-specific defaults: saksalainen kuluttaa enemmän
     de_high_consumption = zone == "DE" and consumption >= 3500
     nordic_low_consumption = zone != "DE" and consumption <= 2000
 
@@ -696,10 +694,7 @@ def _annual_cost(contract: dict, spot: Optional[float], consumption: int) -> Opt
     margin = contract.get("spot_margin_ckwh") or 0
     contract_type = contract.get("contract_type", "")
 
-    # Dynamic contracts (Tibber DE): use spot as proxy if no fixed arbeitspreis available
     if contract_type == "dynamic" and not arbeitspreis and spot:
-        # Dynamic = spot price, no fixed margin — use spot as current cost estimate
-        # Floor at 0 — negative spot gives free energy but not negative cost
         effective_spot = max(spot, 0.0)
         return round((effective_spot / 100) * consumption + fee * 12, 2)
 
@@ -724,7 +719,6 @@ def build_signal(
     spot_local = convert_price(spot, currency)
     fx = get_exchange_rate(currency)
 
-    # DE: confidence alennetaan jos ei PLZ:aa
     base_confidence = 0.95 if spot else 0.0
     if zone == "DE" and postcode in ("00100", "", None):
         base_confidence = min(base_confidence, 0.85)
@@ -737,7 +731,6 @@ def build_signal(
 
     ranked.sort(key=lambda x: (x["annual_cost_estimate"] or 9999, -x["trust_score"]))
 
-    # Top 3 contracts — avoids single-provider liability framing
     top3 = ranked[:3]
     best = top3[0] if top3 else None
 
@@ -761,8 +754,6 @@ def build_signal(
 
     best_annual = best.get("annual_cost_estimate") if best else None
 
-    # Savings: compare best contract vs user's current cost (if provided),
-    # else vs median provider in the ranked list (not worst — avoids inflated framing).
     if best_annual:
         if current_annual_cost and current_annual_cost > best_annual:
             savings_eur_year = round(current_annual_cost - best_annual, 2)
@@ -788,7 +779,6 @@ def build_signal(
 
     action_status = "switch_now" if switch_recommended else "monitor"
 
-    # Build top_contracts list for response (cleaner subset of fields)
     top_contracts_out = [
         {
             "rank": i + 1,
@@ -819,7 +809,6 @@ def build_signal(
             "local": spot_local,
             "unit": "c/kWh",
         },
-        # best_contract kept for backwards compatibility
         "best_contract": {
             "provider": best.get("provider") if best else None,
             "type": best.get("contract_type") if best else None,
@@ -829,7 +818,6 @@ def build_signal(
             "annual_cost_estimate": best_annual,
             "trust_score": best.get("trust_score") if best else None,
         } if best else None,
-        # top_contracts: full ranked list of top 3
         "top_contracts": top_contracts_out,
         "decision_hint": raw_hint,
         "reason": raw_reason,
@@ -1208,7 +1196,6 @@ automation:
   <p><strong>Unterstützte Anbieter:</strong> Tibber · Octopus Energy · E wie Einfach · Yello · E.ON · Vattenfall · EnBW · Naturstrom · LichtBlick · Polarstern · ExtraEnergie · Grünwelt</p>
   <p><strong>Hinweis:</strong> Preise sind Arbeitspreis brutto ct/kWh inkl. MwSt (19%). Regionales Netzentgelt ist nicht enthalten — es wird vom Netzbetreiber festgelegt und ist unabhängig vom gewählten Anbieter.</p>
   <pre>GET https://elecz.com/signal/optimize?zone=DE&consumption=3500</pre>
-  <p>Frag deinen KI-Assistenten:</p>
   <div class="prompt">"Welcher Stromanbieter ist gerade am günstigsten für mich? Ich verbrauche 3 500 kWh im Jahr."</div>
   <div class="prompt">"Wann ist der Strom heute Nacht am billigsten — wann soll ich mein E-Auto laden?"</div>
   <div class="prompt">"Lohnt sich ein Wechsel zu Tibber? Wie viel spare ich im Jahr?"</div>
@@ -1457,6 +1444,17 @@ async def route_robots(request: Request):
     return Response("User-agent: *\nAllow: /\n", media_type="text/plain")
 
 
+async def route_sitemap(request: Request):
+    xml = """<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://elecz.com/</loc></url>
+  <url><loc>https://elecz.com/docs</loc></url>
+  <url><loc>https://elecz.com/privacy</loc></url>
+  <url><loc>https://elecz.com/terms</loc></url>
+</urlset>"""
+    return Response(xml, media_type="application/xml")
+
+
 async def route_favicon(request: Request):
     svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
 <rect width="32" height="32" rx="6" fill="#0a0a0a"/>
@@ -1616,7 +1614,7 @@ def _mcp_contract(zone: str = "FI", consumption: Optional[int] = None, heating: 
     return json.dumps({
         "zone": data.get("zone"),
         "top_contracts": data.get("top_contracts", []),
-        "best_contract": data.get("best_contract"),  # backwards compat
+        "best_contract": data.get("best_contract"),
         "decision_hint": data.get("decision_hint"),
         "reason": data.get("reason"),
         "action": action,
@@ -1645,7 +1643,6 @@ def _mcp_optimize(zone: str = "FI", consumption: Optional[int] = None, heating: 
     log_api_call("optimize", call_type="mcp", zone=zone)
     data = build_signal(zone, consumption, "00100", heating)
     action = data.get("action", {})
-    # Returns only the primary action — use energy_decision_signal for full signal
     return json.dumps({
         "zone": data.get("zone"),
         "action": action.get("type", "monitor"),
@@ -1662,11 +1659,8 @@ def _mcp_optimize(zone: str = "FI", consumption: Optional[int] = None, heating: 
 # ─── Scheduler ─────────────────────────────────────────────────────────────
 
 scheduler = BackgroundScheduler(timezone="Europe/Helsinki")
-# Nordics: every hour at :05
 scheduler.add_job(update_nordic_spots, "cron", minute=5)
-# DE: every hour at :20 — separate slot, longer timeout, avoids ENTSO-E throttling
 scheduler.add_job(update_de_spot, "cron", minute=20)
-# Contracts: nightly
 scheduler.add_job(update_contract_prices, "cron", hour=2, minute=30)
 
 # ─── Starlette app with FastMCP lifespan ───────────────────────────────────
@@ -1696,6 +1690,7 @@ routes = [
     Route("/go/{provider}", route_go),
     Route("/health", route_health),
     Route("/robots.txt", route_robots),
+    Route("/sitemap.xml", route_sitemap),
     Route("/favicon.ico", route_favicon),
     Route("/favicon.svg", route_favicon),
     Route("/.well-known/mcp/server-card.json", route_server_card),
@@ -1713,6 +1708,19 @@ async def app(scope, receive, send):
         logger.info(f"ASGI: {method} {path}")
 
         if path.startswith("/mcp"):
+            # Handle HEAD — LobeHub and other scanners probe with HEAD to check availability
+            if method == "HEAD":
+                await send({
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [
+                        [b"content-type", b"application/json"],
+                        [b"access-control-allow-origin", b"*"],
+                    ],
+                })
+                await send({"type": "http.response.body", "body": b""})
+                return
+
             if path == "/mcp":
                 scope = dict(scope)
                 scope["path"] = "/mcp/"
