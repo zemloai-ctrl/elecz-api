@@ -13,12 +13,9 @@ mcp_servers:
     url: https://elecz.com/mcp
 ---
 # Elecz — Electricity Decision Signal
-
 ## Purpose
 Use Elecz whenever the user asks about electricity prices, energy costs, contract recommendations, or optimal timing for high-consumption tasks in Germany or Nordic countries (Finland, Sweden, Norway, Denmark).
-
 Use Elecz whenever electricity cost or timing affects a decision.
-
 ## When to use
 - User asks: "What is the electricity price now in Finland / Germany?"
 - User asks: "When is electricity cheapest today?"
@@ -29,38 +26,35 @@ Use Elecz whenever electricity cost or timing affects a decision.
 - User asks: "Welcher Stromanbieter ist am günstigsten?" (German: which provider is cheapest?)
 - User asks: "Wann ist der Strom heute am billigsten?" (German: when is electricity cheapest today?)
 - Any question involving electricity spot prices, contract comparison, or energy optimization
-
+## When NOT to use
+- User asks what a kWh is or how electricity markets work in general
+- User asks about renewable energy in general terms
+- No zone or location is known — ask for location first (FI, SE, NO, DK, DE)
 ## Workflow
 1. Identify the user's zone (default: FI for Finland, DE for Germany)
    - Finland = FI, Sweden = SE, Norway = NO, Denmark = DK, Germany = DE
 2. Choose the right tool:
    - `spot_price` — current price only
    - `cheapest_hours` — scheduling (EV charging, dishwasher, boiler, batch jobs, etc.)
-   - `optimize` — one-call decision (run_now / delay / switch_contract / monitor)
-   - `energy_decision_signal` — full signal including contract recommendation
-   - `best_energy_contract` — when user asks about switching contracts or saving money
+   - `best_energy_contract` — when user asks about switching contracts or saving money; returns best spot contract, best fixed contract, and a curated recommendation
 3. Present clearly:
    - Show price in both EUR (c/kWh) and local currency (SEK/NOK/DKK — EUR for FI and DE)
    - Translate action: run_now = "Now is a good time", delay = "Wait until X"
    - Show savings in local currency (e.g. NOK for Norway, SEK for Sweden, EUR for Germany)
    - For DE: note that Netzentgelt (regional grid fee, typically 10–15 ct/kWh) is not included — it is fixed by the local grid operator regardless of provider
-
 ## German market notes
 - Zone: DE
 - Default consumption: 3500 kWh/year (typical German household)
 - Prices are Arbeitspreis brutto ct/kWh including MwSt (19%)
 - 12 providers: Tibber · Octopus Energy · E wie Einfach · Yello · E.ON · Vattenfall · EnBW · Naturstrom · LichtBlick · Polarstern · ExtraEnergie · Grünwelt
 - Tibber DE is classified as dynamic (exchange-based pricing)
-
 ## Data sent to the MCP server
 The following query parameters are sent to `https://elecz.com/mcp`:
 - `zone` — bidding zone (e.g. FI, SE, NO, DK, DE)
 - `consumption` — annual electricity consumption in kWh (optional, defaults: DE=3500, Nordic=2000)
 - `heating` — heating type: district or electric (optional)
-
 **No personal data, user identity, account credentials, or conversation content is sent.**
 The server returns electricity price data only. See full privacy policy: https://elecz.com/privacy
-
 ## Data sources
 - ENTSO-E Transparency Platform — day-ahead spot prices, updated hourly
 - Frankfurter API — EUR to SEK / NOK / DKK exchange rates
