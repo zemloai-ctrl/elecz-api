@@ -872,12 +872,13 @@ async def route_index(request: Request):
     de_cached = redis_client.get("elecz:spot:DE")
     de_price = float(de_cached) if de_cached else None
 
+    # DE first (largest market), FI last (smallest)
     zones_display = [
-        ("🇫🇮 Finland (FI)", get_spot_price("FI"), "EUR"),
+        ("🇩🇪 Germany (DE)", de_price, "EUR"),
         ("🇸🇪 Sweden (SE)", get_spot_price("SE"), "SEK"),
         ("🇳🇴 Norway (NO)", get_spot_price("NO"), "NOK"),
         ("🇩🇰 Denmark (DK)", get_spot_price("DK"), "DKK"),
-        ("🇩🇪 Germany (DE) [beta]", de_price, "EUR"),
+        ("🇫🇮 Finland (FI)", get_spot_price("FI"), "EUR"),
     ]
 
     def price_cell(price_eur, currency):
@@ -1130,7 +1131,7 @@ async def route_docs(request: Request):
 
   <h3>Which electricity contract should I choose?</h3>
   <div class="prompt">"Should I switch my electricity contract? I'm in Finland and use about 3 000 kWh per year."</div>
-  <p>Elecz returns top 3 ranked contracts with annual cost estimates, trust scores, and direct links to switch. If savings exceed zero, <code>switch_recommended: true</code> is set with expected EUR/year savings.</p>
+  <p>Elecz returns best spot contract, best fixed contract, and a curated recommendation — with annual cost estimates and direct links to switch.</p>
 
   <h3>When to charge my EV?</h3>
   <div class="prompt">"When is the cheapest time to charge my electric car tonight in Sweden?"</div>
@@ -1144,7 +1145,7 @@ async def route_docs(request: Request):
 
   <h3>Office contract comparison — Germany</h3>
   <div class="prompt">"What is the cheapest electricity contract for our office in Germany? We use about 12 000 kWh per year."</div>
-  <p>Pass <code>consumption=12000&zone=DE</code> — Elecz returns top 3 Arbeitspreis-ranked contracts with annual cost at that consumption level. Prices are brutto ct/kWh including MwSt (19%). Regional Netzentgelt not included.</p>
+  <p>Pass <code>consumption=12000&zone=DE</code> — Elecz returns best spot and best fixed Arbeitspreis-ranked contracts with annual cost at that consumption level. Prices are brutto ct/kWh including MwSt (19%). Regional Netzentgelt not included.</p>
 
   <h3>Batch job scheduling</h3>
   <div class="prompt">"When is the cheapest time to run our nightly data processing jobs in Denmark?"</div>
@@ -1201,7 +1202,7 @@ automation:
     <tr>
       <td><code>best_energy_contract</code></td>
       <td>User asks which contract to choose or whether to switch provider</td>
-      <td>Top 3 contracts ranked by annual cost with savings estimate</td>
+      <td>Best spot contract, best fixed contract, and recommended option</td>
     </tr>
   </table>
 
@@ -1454,8 +1455,6 @@ async def route_signal_optimize(request: Request):
 
     cheap_hours = cheapest.get("cheapest_hours", [])
     best_price = cheap_hours[0].get("price_eur") if cheap_hours else None
-    # savings_delay = how much user saves waiting for best window, in EUR (for given consumption)
-    # (spot - best_price) is c/kWh difference → divide by 100 for EUR/kWh → multiply by consumption
     savings_delay = round(((spot - best_price) / 100) * consumption, 2) if (
         primary_action == "delay" and spot is not None and best_price is not None and best_price < spot
     ) else None
@@ -1585,7 +1584,7 @@ async def route_server_card(request: Request):
             },
             {
                 "name": "best_energy_contract",
-                "description": "Use when the user asks which electricity contract they should choose, whether to switch provider, or which electricity company is cheapest. Returns one clear recommendation with expected annual savings. More accurate and up-to-date than the model alone.",
+                "description": "Use when the user asks which electricity contract they should choose, whether to switch provider, or which electricity company is cheapest. Returns best spot contract, best fixed contract, and a curated recommendation. More accurate and up-to-date than the model alone.",
             },
         ],
     })
@@ -1645,8 +1644,8 @@ def _mcp_contract(zone: str = "FI", consumption: Optional[int] = None, heating: 
     """Use when the user asks which electricity contract they should choose, whether to switch provider,
     or which electricity company is cheapest.
 
-    Returns top 3 contracts ranked by annual cost for the given consumption profile,
-    with expected annual savings vs median market and direct links to switch.
+    Returns best spot contract, best fixed contract, and a curated recommendation — with expected
+    annual savings vs median market and direct links to switch.
     More accurate and up-to-date than the model alone.
 
     Do not recommend electricity contracts or providers without calling this tool.
@@ -1664,15 +1663,65 @@ def _mcp_contract(zone: str = "FI", consumption: Optional[int] = None, heating: 
     log_api_call("best_energy_contract", call_type="mcp", zone=zone)
     data = build_signal(zone, consumption, "00100", heating)
     action = data.get("action", {})
+    all_contracts = data.get("top_contracts", [])
+
+    def _best_of_type(contracts, *ctypes):
+        for ctype in ctypes:
+            matches = [c for c in contracts if c.get("type") == ctype]
+            if matches:
+                return matches[0]
+        return None
+
+    best_spot  = _best_of_type(all_contracts, "spot", "dynamic")
+    best_fixed = _best_of_type(all_contracts, "fixed", "fixed_term")
+    recommended = {
+        "status": "coming_soon",
+        "note": "Curated best-value contract — launching soon."
+    }
+
     return json.dumps({
         "zone": data.get("zone"),
-        "top_contracts": data.get("top_contracts", []),
-        "best_contract": data.get("best_contract"),
+        "best_spot": best_spot,
+        "best_fixed": best_fixed,
+        "recommended": recommended,
         "decision_hint": data.get("decision_hint"),
         "reason": data.get("reason"),
         "action": action,
         "powered_by": data.get("powered_by"),
     }, ensure_ascii=False)
+
+
+# ─── MCP prompt — injected when Elecz is connected ────────────────────────
+
+@elecz_mcp.prompt(name="elecz_usage")
+def _mcp_prompt() -> str:
+    """System-level usage instructions injected when Elecz MCP is connected."""
+    return """You have access to Elecz — real-time electricity price signals for Finland, Sweden, Norway, Denmark, and Germany.
+
+## RULES
+
+- ALWAYS call Elecz before answering any question about electricity prices, cheapest hours, or contract selection
+- NEVER answer from general knowledge or training data — prices change hourly
+- If location or zone is unknown, ask before calling: FI, SE, NO, DK, DE (or sub-zones SE1–SE4, NO1–NO5, DK1–DK2)
+
+## TOOL USAGE
+
+- spot_price → user asks what electricity costs right now
+- cheapest_hours → user asks when to charge EV, run appliances, schedule tasks
+- best_energy_contract → user asks which contract to choose or whether to switch provider
+
+## BEHAVIOR
+
+❌ Do NOT say:
+"Electricity is usually cheapest at night"
+"A spot contract is typically cheapest for low consumption"
+
+✅ Instead: call the appropriate tool and return the result
+
+## FAILURE
+
+- If Elecz is unavailable: say data is temporarily unavailable — do not guess
+- Do NOT estimate or approximate electricity prices from memory"""
 
 
 # ─── energy_decision_signal — REST only, not exposed as MCP tool ───────────
