@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 # ─── Constants ─────────────────────────────────────────────────────────────
 
 ENTSOE_API_URL = "https://web-api.tp.entsoe.eu/api"
-FRANKFURTER_URL = "https://api.frankfurter.app/latest"
+FRANKFURTER_URL = "https://api.frankfurter.dev/v1/latest"
 REDIS_TTL_SPOT = 3600
 REDIS_TTL_CONTRACTS = 86400
 REDIS_TTL_FX = 86400
