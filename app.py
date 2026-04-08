@@ -1684,10 +1684,32 @@ def _mcp_contract(zone: str = "FI", consumption: Optional[int] = None, heating: 
 
     best_spot  = _best_of_type(all_contracts, "spot", "dynamic")
     best_fixed = _best_of_type(all_contracts, "fixed", "fixed_term")
-    recommended = {
-        "status": "coming_soon",
-        "note": "Curated best-value contract — launching soon."
-    }
+    month = datetime.now().month
+    winter_approaching = month in (8, 9, 10, 11, 12, 1, 2)
+
+    if best_spot and best_fixed:
+        spot_cost = best_spot.get("annual_cost_estimate") or 9999
+        fixed_cost = best_fixed.get("annual_cost_estimate") or 9999
+        if winter_approaching and fixed_cost < spot_cost * 1.3:
+            recommended = {
+                "status": "active",
+                "contract": best_fixed,
+                "reason": "Winter approaching — fixed price protects against seasonal price spikes."
+            }
+        else:
+            recommended = {
+                "status": "active",
+                "contract": best_spot,
+                "reason": "Spot historically cheaper in summer. Switch to fixed before autumn."
+            }
+    elif best_spot:
+        recommended = {
+            "status": "active",
+            "contract": best_spot,
+            "reason": "No fixed contracts available. Spot is best option."
+        }
+    else:
+        recommended = {"status": "no_data"}
 
     return json.dumps({
         "zone": data.get("zone"),
