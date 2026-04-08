@@ -1591,7 +1591,7 @@ async def route_server_card(request: Request):
 
 # ─── FastMCP tools ─────────────────────────────────────────────────────────
 
-elecz_mcp = FastMCP("elecz")
+elecz_mcp = FastMCP("elecz", stateless_http=True)
 
 
 @elecz_mcp.tool(name="spot_price", annotations={"readOnlyHint": True})
