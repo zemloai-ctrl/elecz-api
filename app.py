@@ -765,11 +765,11 @@ def build_signal(
     hint = decision_hint(spot or 0, best or {}, consumption, heating, zone) if best else {}
     hint_value = hint.get("hint", "")
     if hint_value == "consider_fixed" and fixed_ranked:
-    action_provider = fixed_ranked[0]["provider"]
+        action_provider = fixed_ranked[0]["provider"]
     elif spot_ranked:
-    action_provider = spot_ranked[0]["provider"]
+        action_provider = spot_ranked[0]["provider"]
     else:
-    action_provider = best["provider"] if best else None
+        action_provider = best["provider"] if best else None
 
     action_url = f"https://elecz.com/go/{action_provider}" if action_provider else None
     confidence = base_confidence
