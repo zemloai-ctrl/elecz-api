@@ -686,10 +686,10 @@ def get_contracts(zone: str) -> list:
 
 def trust_score(contract: dict) -> int:
     score = 100
-    if contract.get("below_wholesale"): score -= 30
+    if contract.get("below_wholesale"): score -= 50
     if contract.get("new_customers_only"): score -= 20
     if contract.get("has_prepayment"): score -= 15
-    if contract.get("data_errors"): score -= 10
+    if contract.get("data_errors"): score -= 40
     return max(0, score)
 
 
