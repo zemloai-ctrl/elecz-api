@@ -757,7 +757,9 @@ def build_signal(
 
     ranked.sort(key=lambda x: (x["annual_cost_estimate"] or 9999, -x["trust_score"]))
 
-    top3 = ranked[:3]
+    spot_ranked = [c for c in ranked if c.get("contract_type") in ("spot", "dynamic")]
+    fixed_ranked = [c for c in ranked if c.get("contract_type") in ("fixed", "fixed_term")]
+    top3 = spot_ranked[:2] + fixed_ranked[:1] if fixed_ranked else ranked[:3]
     best = top3[0] if top3 else None
 
     hint = decision_hint(spot or 0, best or {}, consumption, heating, zone) if best else {}
