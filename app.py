@@ -618,7 +618,7 @@ def update_contract_prices():
                         "affiliate_url": None,
                         "scraped_at": datetime.now(timezone.utc).isoformat(),
                         "updated_at": datetime.now(timezone.utc).isoformat(),
-                    }, on_conflict="provider,zone").execute()
+                    }, on_conflict="provider,zone,contract_type").execute()
                     logger.info(f" ✓ {zone}/{provider}")
                 except Exception as e:
                     logger.error(f" ✗ {zone}/{provider}: {e}")
