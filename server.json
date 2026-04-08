@@ -7,7 +7,7 @@
     "url": "https://github.com/zemloai-ctrl/elecz-api",
     "source": "github"
   },
-  "version": "1.0.1",
+  "version": "1.0.2",
   "remotes": [
     {
       "type": "streamable-http",
