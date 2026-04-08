@@ -1810,7 +1810,25 @@ async def app(scope, receive, send):
         logger.info(f"ASGI: {method} {path}")
 
         if path.startswith("/mcp"):
-            # Handle HEAD — LobeHub and other scanners probe with HEAD to check availability
+            # ── Fix Accept header ──────────────────────────────────────────
+            # Some scanners and clients (LobeHub, etc.) send Accept: */* or
+            # omit text/event-stream. FastMCP (python-sdk) strictly requires
+            # both application/json and text/event-stream and returns 406
+            # otherwise. We normalise the header here before the request
+            # reaches FastMCP. Upstream issue: python-sdk #1641.
+            scope = dict(scope)
+            fixed_headers = []
+            for key, value in scope.get("headers", []):
+                if key.lower() == b"accept":
+                    decoded = value.decode("utf-8", errors="replace")
+                    if "application/json" not in decoded or "text/event-stream" not in decoded:
+                        logger.info(f"Accept header fixed: '{decoded}' → 'application/json, text/event-stream'")
+                        value = b"application/json, text/event-stream"
+                fixed_headers.append((key, value))
+            scope["headers"] = fixed_headers
+
+            # ── Handle HEAD ────────────────────────────────────────────────
+            # LobeHub and other scanners probe with HEAD to check availability
             if method == "HEAD":
                 await send({
                     "type": "http.response.start",
@@ -1824,7 +1842,6 @@ async def app(scope, receive, send):
                 return
 
             if path == "/mcp":
-                scope = dict(scope)
                 scope["path"] = "/mcp/"
                 scope["raw_path"] = b"/mcp/"
 
