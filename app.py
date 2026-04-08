@@ -1884,7 +1884,10 @@ async def app(scope, receive, send):
                         body_bytes = message.get("body", b"")
                         if not body_bytes:
                             return message
-                        body = json.loads(body_bytes)
+                        try:
+                            body = json.loads(body_bytes)
+                        except json.JSONDecodeError:
+                            return message
                         method = body.get("method", "")
                         logger.info(f"MCP method: {method}")
                         if "ai.smithery" in method:
