@@ -1851,8 +1851,8 @@ def _mcp_contract(zone: str = "FI", consumption: Optional[int] = None, heating: 
                 return matches[0]
         return None
 
-    best_spot  = _best_of_type(all_contracts, "spot", "dynamic")
-    best_fixed = _best_of_type(all_contracts, "fixed", "fixed_term", "tou", "variable")
+    best_spot  = _best_of_type(all_contracts, "spot", "dynamic", "tou")
+    best_fixed = _best_of_type(all_contracts, "fixed", "fixed_term", "variable")
     month = datetime.now().month
     winter_approaching = month in (8, 9, 10, 11, 12, 1, 2)
 
