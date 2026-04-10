@@ -946,22 +946,25 @@ def decision_hint(spot: float, contract: dict, consumption: int, heating: str, z
 
 
 def _annual_cost(contract: dict, spot: Optional[float], consumption: int) -> Optional[float]:
-    """Calculate estimated annual cost for a contract given consumption and current spot."""
+    """Calculate estimated annual cost for a contract given consumption and current spot.
+    Includes standing charge (p/day) where available — relevant for GB tariffs.
+    """
     fee = contract.get("basic_fee_eur_month") or 0
     fixed = contract.get("fixed_price_ckwh")
     arbeitspreis = contract.get("arbeitspreis_ckwh")
     margin = contract.get("spot_margin_ckwh") or 0
     contract_type = contract.get("contract_type", "")
+    standing = (contract.get("standing_charge_p_day") or 0) * 365 / 100  # p/day → annual
 
     if contract_type == "dynamic" and not arbeitspreis and spot:
         effective_spot = max(spot, 0.0)
-        return round((effective_spot / 100) * consumption + fee * 12, 2)
+        return round((effective_spot / 100) * consumption + fee * 12 + standing, 2)
 
     effective_fixed = fixed or arbeitspreis
     if effective_fixed:
-        return round((effective_fixed / 100) * consumption + fee * 12, 2)
+        return round((effective_fixed / 100) * consumption + fee * 12 + standing, 2)
     if spot is not None:
-        return round(((spot + margin) / 100) * consumption + fee * 12, 2)
+        return round(((spot + margin) / 100) * consumption + fee * 12 + standing, 2)
     return None
 
 
@@ -1115,7 +1118,7 @@ def build_signal(
     if zone == "DE":
         result["disclaimer"] = "Price excludes regional Netzentgelt (varies 10-15 ct/kWh by area)."
     if zone in GB_ZONES:
-        result["disclaimer"] = "Agile prices shown inc VAT (5%). Standing charge not included in annual estimate."
+        result["disclaimer"] = "Agile prices shown inc VAT (5%). Annual cost estimate includes standing charge where available."
 
     return result
 
