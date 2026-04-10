@@ -548,7 +548,9 @@ def get_cheapest_hours(zone: str, n_hours: int = 5, window_h: int = 24) -> dict:
         logger.error(f"Cheapest hours chrono fetch failed: {e}")
         rows_chrono = sorted(rows, key=lambda r: r["hour"])
 
-    best_window = _best_consecutive_window(rows_chrono, 3)
+    # GB uses 30min slots — need 6 slots for a 3h window; other markets use hourly (3 slots)
+    window_slots = 6 if zone in GB_ZONES else 3
+    best_window = _best_consecutive_window(rows_chrono, window_slots)
 
     current_price = get_spot_price(zone) or avg
     if current_price < avg * CHEAP_THRESHOLD:
@@ -594,7 +596,6 @@ def _best_consecutive_window(rows: list, window: int) -> Optional[dict]:
             best_end = rows[i + window - 1]["hour"][:16]
     return {"start": best_start, "end": best_end, "avg_price": round(best_avg, 4),
             "note": "end is the start of the last cheap slot in the window"}
-
 
 def _expensive_hours(rows: list, avg: float) -> list[str]:
     return [r["hour"][:16] for r in rows if r["price_ckwh"] > avg * 1.3][:6]
@@ -1007,10 +1008,10 @@ def build_signal(
     hint_value = hint.get("hint", "")
     if hint_value == "consider_fixed" and fixed_ranked:
         action_provider = fixed_ranked[0]["provider"]
-    elif spot_ranked:
-        action_provider = spot_ranked[0]["provider"]
+    elif best:
+        action_provider = best["provider"]
     else:
-        action_provider = best["provider"] if best else None
+        action_provider = None
 
     action_url = f"https://elecz.com/go/{action_provider}" if action_provider else None
     confidence = base_confidence
