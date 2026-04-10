@@ -42,8 +42,8 @@ REDIS_TTL_SPOT = 3600
 REDIS_TTL_CONTRACTS = 86400
 REDIS_TTL_FX = 86400
 
-ABNORMAL_PRICE_HIGH = 300.0   # EUR/MWh — hintapiikki
-ABNORMAL_PRICE_LOW  = -50.0   # EUR/MWh — negatiivinen ääriarvo
+ABNORMAL_PRICE_HIGH = 300.0   # EUR/MWh — price spike threshold
+ABNORMAL_PRICE_LOW  = -50.0   # EUR/MWh — negative price floor
 
 # Price state thresholds (ratio to 24h average)
 CHEAP_THRESHOLD = 0.7
