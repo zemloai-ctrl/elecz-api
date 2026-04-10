@@ -115,7 +115,15 @@ PROVIDER_URLS = {
     "GB": {
         "octopus_agile": "https://octopus.energy/smart/agile/",
         "octopus_go": "https://octopus.energy/smart/go/",
+        "octopus_intelligent": "https://octopus.energy/smart/intelligent/",
         "ofgem_svt": "https://www.ofgem.gov.uk/check-if-energy-price-cap-affects-you",
+        "british_gas": "https://www.britishgas.co.uk/energy/gas-and-electricity.html",
+        "eon_next": "https://www.eonnext.com/tariffs",
+        "ovo_energy": "https://www.ovoenergy.com/energy-plans",
+        "edf_energy": "https://www.edfenergy.com/electric-cars/tariffs",
+        "scottish_power": "https://www.scottishpower.co.uk/energy-tariffs",
+        "shell_energy": "https://www.shellenergy.co.uk/energy/tariffs",
+        "so_energy": "https://so.energy/tariffs",
     },
 }
 
@@ -176,7 +184,15 @@ PROVIDER_DIRECT_URLS = {
     "GB": {
         "octopus_agile": "https://octopus.energy/smart/agile/",
         "octopus_go": "https://octopus.energy/smart/go/",
+        "octopus_intelligent": "https://octopus.energy/smart/intelligent/",
         "ofgem_svt": "https://www.ofgem.gov.uk/check-if-energy-price-cap-affects-you",
+        "british_gas": "https://www.britishgas.co.uk/energy/gas-and-electricity.html",
+        "eon_next": "https://www.eonnext.com/tariffs",
+        "ovo_energy": "https://www.ovoenergy.com/energy-plans",
+        "edf_energy": "https://www.edfenergy.com/electric-cars/tariffs",
+        "scottish_power": "https://www.scottishpower.co.uk/energy-tariffs",
+        "shell_energy": "https://www.shellenergy.co.uk/energy/tariffs",
+        "so_energy": "https://so.energy/tariffs",
     },
 }
 
@@ -598,9 +614,19 @@ Search for the current electricity tariff pricing from this provider: {url}
 Provider: {provider}, Market: United Kingdom (GB)
 
 Return pricing in pence per kWh (p/kWh) including VAT (5%).
-For octopus_agile: contract_type = "dynamic", is_spot = true. Return current average unit rate if available.
-For octopus_go: contract_type = "tou", return the off-peak rate (23:30-05:30) as fixed_price_ckwh.
-For ofgem_svt: contract_type = "variable", return current price cap unit rate in p/kWh.
+
+Provider-specific rules:
+- octopus_agile: contract_type = "dynamic", is_spot = true. Return current average unit rate as arbeitspreis_ckwh if available.
+- octopus_go: contract_type = "tou", return the off-peak rate (23:30-05:30) as fixed_price_ckwh.
+- octopus_intelligent: contract_type = "tou", is_spot = false. EV-optimised tariff, return off-peak rate as fixed_price_ckwh.
+- ofgem_svt: contract_type = "variable", return current Ofgem price cap unit rate in p/kWh as arbeitspreis_ckwh.
+- british_gas: return their standard variable tariff as contract_type = "variable", arbeitspreis_ckwh in p/kWh.
+- eon_next: return their standard tariff, contract_type = "variable" or "fixed" depending on what is current.
+- ovo_energy: return their standard tariff, contract_type = "variable".
+- edf_energy: return their standard tariff, contract_type = "variable" or "fixed".
+- scottish_power: return their standard tariff, contract_type = "variable".
+- shell_energy: return their standard tariff, contract_type = "variable".
+- so_energy: return their standard tariff, contract_type = "variable" or "fixed".
 
 Return ONLY a valid JSON object with no markdown, no explanation:
 {{
@@ -623,7 +649,7 @@ Return ONLY a valid JSON object with no markdown, no explanation:
   "scraped_at": "{now_iso}"
 }}
 Note: arbeitspreis_ckwh is the unit rate in p/kWh. Must be between 5 and 50 p/kWh for UK residential tariffs.
-standing_charge_p_day is in pence per day.
+standing_charge_p_day is in pence per day — typically 40-70p/day for UK tariffs.
 """
         for attempt in range(3):
             try:
