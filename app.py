@@ -422,7 +422,11 @@ def get_spot_price(zone: str = "FI") -> Optional[float]:
     Never calls upstream APIs directly — avoids blocking event loop.
     """
     key = f"elecz:spot:{zone}"
-    cached = redis_client.get(key)
+    try:
+        cached = redis_client.get(key)
+    except Exception as e:
+        logger.warning(f"Redis get failed zone={zone}: {e}")
+        cached = None
     if cached:
         return float(cached)
 
@@ -992,14 +996,14 @@ def build_signal(
         annual = _annual_cost(c, spot, consumption)
         ranked.append({**c, "trust_score": ts, "annual_cost_estimate": round(annual, 2) if annual else None})
 
-    ranked.sort(key=lambda x: (x["annual_cost_estimate"] or 9999, -x["trust_score"]))
+    ranked.sort(key=lambda x: (x["annual_cost_estimate"] is None, x["annual_cost_estimate"] or 0, -x["trust_score"]))
 
     spot_ranked = [c for c in ranked if c.get("contract_type") in ("spot", "dynamic")]
     fixed_ranked = [c for c in ranked if c.get("contract_type") in ("fixed", "fixed_term")]
     top3 = spot_ranked[:2] + fixed_ranked[:1] if fixed_ranked else ranked[:3]
     best = top3[0] if top3 else None
 
-    hint = decision_hint(spot or 0, best or {}, consumption, heating, zone) if best else {}
+    hint = decision_hint(spot if spot is not None else 0, best or {}, consumption, heating, zone) if best else {}
     hint_value = hint.get("hint", "")
     if hint_value == "consider_fixed" and fixed_ranked:
         action_provider = fixed_ranked[0]["provider"]
