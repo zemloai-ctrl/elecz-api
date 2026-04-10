@@ -1061,15 +1061,20 @@ def build_signal(
 
     action_status = "switch_now" if switch_recommended else "monitor"
 
+    gb_zone = zone in GB_ZONES
+
     top_contracts_out = [
         {
             "rank": i + 1,
             "provider": c.get("provider"),
             "type": c.get("contract_type"),
-            "spot_margin_ckwh": c.get("spot_margin_ckwh"),
-            "arbeitspreis_ckwh": c.get("arbeitspreis_ckwh"),
-            "basic_fee_eur_month": c.get("basic_fee_eur_month"),
-            "standing_charge_p_day": c.get("standing_charge_p_day"),
+            **({} if gb_zone else {
+                "spot_margin_ckwh": c.get("spot_margin_ckwh"),
+                "arbeitspreis_ckwh": c.get("arbeitspreis_ckwh"),
+                "basic_fee_eur_month": c.get("basic_fee_eur_month"),
+            }),
+            **({"unit_rate_p_kwh": c.get("arbeitspreis_ckwh") or c.get("fixed_price_ckwh"),
+                "standing_charge_p_day": c.get("standing_charge_p_day")} if gb_zone else {}),
             "annual_cost_estimate": c.get("annual_cost_estimate"),
             "trust_score": c.get("trust_score"),
             "provider_url": c.get("direct_url") or PROVIDER_DIRECT_URLS.get(zone, {}).get(c.get("provider")),
@@ -1096,10 +1101,13 @@ def build_signal(
         "best_contract": {
             "provider": best.get("provider") if best else None,
             "type": best.get("contract_type") if best else None,
-            "spot_margin_ckwh": best.get("spot_margin_ckwh") if best else None,
-            "arbeitspreis_ckwh": best.get("arbeitspreis_ckwh") if best else None,
-            "basic_fee_eur_month": best.get("basic_fee_eur_month") if best else None,
-            "standing_charge_p_day": best.get("standing_charge_p_day") if best else None,
+            **({} if gb_zone else {
+                "spot_margin_ckwh": best.get("spot_margin_ckwh") if best else None,
+                "arbeitspreis_ckwh": best.get("arbeitspreis_ckwh") if best else None,
+                "basic_fee_eur_month": best.get("basic_fee_eur_month") if best else None,
+            }),
+            **({"unit_rate_p_kwh": (best.get("arbeitspreis_ckwh") or best.get("fixed_price_ckwh")) if best else None,
+                "standing_charge_p_day": best.get("standing_charge_p_day") if best else None} if gb_zone else {}),
             "annual_cost_estimate": best_annual,
             "trust_score": best.get("trust_score") if best else None,
         } if best else None,
