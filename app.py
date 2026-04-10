@@ -17,6 +17,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 import httpx
+import xml.etree.ElementTree as ET
 from urllib.parse import quote
 from starlette.applications import Starlette
 from starlette.requests import Request
