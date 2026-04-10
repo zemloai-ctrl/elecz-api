@@ -137,12 +137,13 @@ PROVIDER_URLS = {
         "alinta": "https://www.alintaenergy.com.au/electricity",
     },
     "NZ": {
-        "flick_electric": "https://www.flickelectric.co.nz/find-a-plan",
+        # Flick Electric was acquired by Meridian Energy in July 2025 — brand retired
         "mercury_energy": "https://www.mercury.co.nz/electricity",
         "contact_energy": "https://contact.co.nz/products/electricity",
         "genesis_energy": "https://www.genesisenergy.co.nz/electricity",
         "meridian_energy": "https://www.meridianenergy.co.nz/electricity",
         "electric_kiwi": "https://www.electrickiwi.co.nz/power-plans",
+        "contact_energy_ev": "https://contact.co.nz/products/electricity/electric-vehicles",
     },
 }
 
@@ -222,12 +223,13 @@ PROVIDER_DIRECT_URLS = {
         "alinta": "https://www.alintaenergy.com.au",
     },
     "NZ": {
-        "flick_electric": "https://www.flickelectric.co.nz",
+        # Flick Electric was acquired by Meridian Energy in July 2025 — brand retired
         "mercury_energy": "https://www.mercury.co.nz",
         "contact_energy": "https://contact.co.nz",
         "genesis_energy": "https://www.genesisenergy.co.nz",
         "meridian_energy": "https://www.meridianenergy.co.nz",
         "electric_kiwi": "https://www.electrickiwi.co.nz",
+        "contact_energy_ev": "https://contact.co.nz/products/electricity/electric-vehicles",
     },
 }
 
@@ -279,6 +281,47 @@ NZ_ZONES = {"NZ-NI", "NZ-SI"}
 NZ_REGION_MAP = {
     "NZ-NI": "NI",  # North Island
     "NZ-SI": "SI",  # South Island
+}
+
+# Static NZ retailer feature flags — updated manually as market changes
+# Flick Electric acquired by Meridian Energy July 2025 — no spot pass-through retailers remain
+NZ_FEATURES = {
+    "electric_kiwi": {
+        "free_hour_daily": True,
+        "free_hour_note": "Hour of Power — one free hour of electricity per day (off-peak, customer selects time)",
+        "ev_charger_network": False,
+        "spot_passthrough": False,
+    },
+    "genesis_energy": {
+        "free_hour_daily": False,
+        "ev_charger_network": True,
+        "ev_charger_note": "Genesis Energy partners with ChargeNet NZ — EV charging costs can be added to monthly bill",
+        "spot_passthrough": False,
+    },
+    "contact_energy": {
+        "free_hour_daily": False,
+        "ev_charger_network": False,
+        "spot_passthrough": False,
+    },
+    "contact_energy_ev": {
+        "free_hour_daily": False,
+        "ev_charger_network": False,
+        "spot_passthrough": False,
+        "ev_optimised": True,
+        "ev_note": "Contact Energy EV-specific tariff with off-peak rates for overnight charging",
+    },
+    "mercury_energy": {
+        "free_hour_daily": False,
+        "ev_charger_network": False,
+        "spot_passthrough": False,
+    },
+    "meridian_energy": {
+        "free_hour_daily": False,
+        "ev_charger_network": False,
+        "spot_passthrough": False,
+        "acquired_flick": True,
+        "acquired_flick_note": "Meridian acquired Flick Electric (July 2025). No spot pass-through currently offered.",
+    },
 }
 
 ZONE_CURRENCY = {
@@ -768,13 +811,14 @@ Return pricing in New Zealand cents per kWh (NZD c/kWh) including GST (15%).
 If price is listed as NZD/kWh, multiply by 100.
 
 Provider-specific rules:
-- flick_electric: contract_type = "spot", is_spot = true. Flick passes through NZEM wholesale prices + service fee. Return service fee as spot_margin_ckwh if available.
 - mercury_energy: return their standard fixed tariff, contract_type = "fixed". Return usage rate as arbeitspreis_ckwh.
 - contact_energy: return their standard fixed tariff, contract_type = "fixed". Return usage rate as arbeitspreis_ckwh.
-- genesis_energy: return their standard fixed tariff, contract_type = "fixed". Return usage rate as arbeitspreis_ckwh.
-- meridian_energy: return their standard fixed tariff, contract_type = "fixed". Return usage rate as arbeitspreis_ckwh.
-- electric_kiwi: return their cheapest fixed tariff, contract_type = "fixed". Return usage rate as arbeitspreis_ckwh.
+- contact_energy_ev: return their EV-specific tariff if available, contract_type = "fixed". Return usage rate as arbeitspreis_ckwh.
+- genesis_energy: return their standard fixed tariff, contract_type = "fixed". Note Genesis has a partnership with ChargeNet EV network.
+- meridian_energy: return their standard fixed tariff, contract_type = "fixed". Note Meridian acquired Flick Electric in July 2025 and now covers former Flick customers. Return usage rate as arbeitspreis_ckwh.
+- electric_kiwi: return their cheapest fixed tariff, contract_type = "fixed". Return usage rate as arbeitspreis_ckwh. Note Electric Kiwi offers "Hour of Power" — one free hour of electricity per day.
 
+Note: No NZ retailer currently offers real-time spot pass-through pricing (Flick Electric was acquired by Meridian in July 2025).
 Typical NZ residential usage rates are between 20 and 40 NZD c/kWh incl GST.
 Daily supply charge is typically 50-120 NZD c/day.
 
@@ -782,15 +826,15 @@ Return ONLY a valid JSON object with no markdown, no explanation:
 {{
   "provider": "{provider}",
   "zone": "NZ",
-  "spot_margin_ckwh": <float or null>,
+  "spot_margin_ckwh": null,
   "arbeitspreis_ckwh": <float or null>,
   "basic_fee_eur_month": null,
   "fixed_price_ckwh": <float or null>,
-  "contract_type": "spot" | "fixed" | "variable",
+  "contract_type": "fixed" | "variable",
   "contract_duration_months": <int or null>,
   "new_customers_only": false,
   "below_wholesale": false,
-  "is_spot": <bool>,
+  "is_spot": false,
   "is_fixed": <bool>,
   "price_includes_tax": true,
   "standing_charge_p_day": <float or null>,
@@ -821,10 +865,9 @@ Note: arbeitspreis_ckwh is usage rate in NZD c/kWh incl GST (15%). standing_char
             logger.error(f"Invalid JSON from Gemini NZ/{provider}: {je}")
             return None
 
-        if provider == "flick_electric":
-            data["contract_type"] = "spot"
-            data["is_spot"] = True
-
+        # No spot retailers in NZ as of July 2025 (Flick acquired by Meridian)
+        data["is_spot"] = False
+        data["spot_margin_ckwh"] = None
         data["scraped_at"] = now_iso
         data["currency"] = "NZD"
         logger.info(f" ✓ NZ/{provider}")
@@ -1288,6 +1331,7 @@ def update_au_spot():
 def update_nz_spot():
     """Scheduler job: update NZ spot prices from EM6 — runs every 30 min.
     EM6 trading period = 30 minutes. No authentication required.
+    Also computes island_spread (NI vs SI price divergence) and hvdc_direction.
     """
     logger.info("Updating NZ spot prices...")
     rows = fetch_em6()
@@ -1301,10 +1345,12 @@ def update_nz_spot():
         second=0, microsecond=0
     )
 
+    prices_by_zone = {}
     records = []
     for r in rows:
         zone = r["zone"]
         price = r["price_ckwh"]
+        prices_by_zone[zone] = price
 
         redis_client.setex(f"elecz:spot:{zone}", 2100, str(price))
         logger.info(f"Cached NZ spot {zone}: {price} NZD c/kWh")
@@ -1318,6 +1364,31 @@ def update_nz_spot():
             "source": "EM6",
             "created_at": now.isoformat(),
         })
+
+    # Compute island spread — NI vs SI divergence
+    ni_price = prices_by_zone.get("NZ-NI")
+    si_price = prices_by_zone.get("NZ-SI")
+    if ni_price is not None and si_price is not None:
+        spread = round(ni_price - si_price, 4)  # positive = NI more expensive
+        spread_pct = round(abs(spread) / max(si_price, ni_price, 0.01) * 100, 1)
+
+        if spread_pct < 10:
+            hvdc_direction = "balanced"
+        elif spread > 0:
+            hvdc_direction = "north"   # power flowing north, NI more expensive
+        else:
+            hvdc_direction = "south"   # unusual, SI more expensive
+
+        island_spread_data = {
+            "ni_price": ni_price,
+            "si_price": si_price,
+            "spread_ckwh": spread,
+            "spread_pct": spread_pct,
+            "hvdc_direction": hvdc_direction,
+            "ni_premium": spread > 0,
+        }
+        redis_client.setex("elecz:nz_island_spread", 2100, json.dumps(island_spread_data))
+        logger.info(f"NZ island spread: NI={ni_price} SI={si_price} spread={spread} direction={hvdc_direction}")
 
     if records:
         try:
@@ -1410,13 +1481,39 @@ def _annual_cost(contract: dict, spot: Optional[float], consumption: int) -> Opt
     contract_type = contract.get("contract_type", "")
     standing = (contract.get("standing_charge_p_day") or 0) * 365 / 100
 
-    if contract_type == "dynamic" and not arbeitspreis and spot:
-        effective_spot = max(spot, 0.0)
-        return round((effective_spot / 100) * consumption + fee * 12 + standing, 2)
+    if contract_type in ("dynamic",):
+        # Dynamic: use arbeitspreis if available (effective average), else spot + margin
+        if arbeitspreis:
+            return round((arbeitspreis / 100) * consumption + fee * 12 + standing, 2)
+        if spot is not None:
+            effective_spot = max(spot, 0.0)
+            return round((effective_spot / 100) * consumption + fee * 12 + standing, 2)
+        return None
 
-    effective_fixed = fixed or arbeitspreis
-    if effective_fixed:
-        return round((effective_fixed / 100) * consumption + fee * 12 + standing, 2)
+    if contract_type in ("spot",):
+        # Spot pass-through: spot + margin
+        if spot is not None:
+            return round(((spot + margin) / 100) * consumption + fee * 12 + standing, 2)
+        return None
+
+    if contract_type in ("fixed", "fixed_term"):
+        # Fixed: use fixed_price_ckwh, fall back to arbeitspreis
+        rate = fixed or arbeitspreis
+        if rate:
+            return round((rate / 100) * consumption + fee * 12 + standing, 2)
+        return None
+
+    if contract_type in ("variable", "tou"):
+        # Variable/TOU: use arbeitspreis as effective rate
+        rate = arbeitspreis or fixed
+        if rate:
+            return round((rate / 100) * consumption + fee * 12 + standing, 2)
+        return None
+
+    # Unknown contract type — best effort
+    rate = fixed or arbeitspreis
+    if rate:
+        return round((rate / 100) * consumption + fee * 12 + standing, 2)
     if spot is not None:
         return round(((spot + margin) / 100) * consumption + fee * 12 + standing, 2)
     return None
@@ -1555,6 +1652,7 @@ def build_signal(
             "annual_cost_estimate": c.get("annual_cost_estimate"),
             "trust_score": c.get("trust_score"),
             "provider_url": c.get("direct_url") or PROVIDER_DIRECT_URLS.get(zone, {}).get(c.get("provider")),
+            **({"nz_features": NZ_FEATURES.get(c.get("provider"), {})} if nz_zone else {}),
         }
         for i, c in enumerate(top3)
     ]
@@ -1571,7 +1669,7 @@ def build_signal(
 
     result = {
         "signal": "elecz",
-        "version": "1.9",
+        "version": "1.9.1",
         "zone": zone,
         "currency": currency,
         "unit": unit,
@@ -1618,12 +1716,18 @@ def build_signal(
                 "volatility_index": float(vol_raw) if vol_raw else None,
                 "spike_risk": bool(int(spike_raw)) if spike_raw else False,
                 "solar_soak": bool(int(soak_raw)) if soak_raw else False,
-                "charge_hold_discharge": action_raw.decode() if action_raw else "hold",
+                "charge_hold_discharge": action_raw.decode() if isinstance(action_raw, bytes) else (action_raw or "hold"),
             }
         except Exception as e:
             logger.warning(f"AU signals read failed {zone}: {e}")
     if zone in NZ_ZONES:
-        result["disclaimer"] = "NZEM spot prices in NZD c/kWh via EM6 real-time API. Annual cost estimate includes daily supply charge where available."
+        result["disclaimer"] = "NZEM spot prices in NZD c/kWh via EM6 real-time API. Annual cost estimate includes daily supply charge where available. No spot pass-through retailers currently available in NZ (Flick Electric acquired by Meridian July 2025)."
+        try:
+            spread_raw = redis_client.get("elecz:nz_island_spread")
+            if spread_raw:
+                result["island_spread"] = json.loads(spread_raw)
+        except Exception as e:
+            logger.warning(f"NZ island spread read failed: {e}")
 
     return result
 
@@ -2093,10 +2197,17 @@ async def route_signal_spot(request: Request):
                 "volatility_index": float(vol_raw) if vol_raw else None,
                 "spike_risk": bool(int(spike_raw)) if spike_raw else False,
                 "solar_soak": bool(int(soak_raw)) if soak_raw else False,
-                "charge_hold_discharge": action_raw.decode() if action_raw else "hold",
+                "charge_hold_discharge": action_raw.decode() if isinstance(action_raw, bytes) else (action_raw or "hold"),
             }
         except Exception as e:
             logger.warning(f"AU signals read failed {zone}: {e}")
+    if zone in NZ_ZONES:
+        try:
+            spread_raw = redis_client.get("elecz:nz_island_spread")
+            if spread_raw:
+                response["island_spread"] = json.loads(spread_raw)
+        except Exception as e:
+            logger.warning(f"NZ island spread read failed {zone}: {e}")
     return JSONResponse(response)
 
 
@@ -2209,7 +2320,7 @@ async def route_go(request: Request):
 
 
 async def route_health(request: Request):
-    return JSONResponse({"status": "ok", "service": "elecz", "version": "1.9"})
+    return JSONResponse({"status": "ok", "service": "elecz", "version": "1.9.1"})
 
 
 async def route_robots(request: Request):
@@ -2247,7 +2358,7 @@ async def route_server_card(request: Request):
         "name": "elecz",
         "displayName": "⚡ Elecz — Electricity Signal for AI Agents",
         "description": "Real-time electricity spot prices, cheapest hours, and contract recommendations for Nordic markets, Germany, United Kingdom, Australia, and New Zealand. No authentication required.",
-        "version": "1.9.0",
+        "version": "1.9.1",
         "homepage": "https://elecz.com",
         "privacy_url": "https://elecz.com/privacy",
         "maintainer": "Sakari Korkia-Aho / Zemlo AI",
@@ -2318,10 +2429,18 @@ def _mcp_spot(zone: str = "FI") -> str:
                 "volatility_index": float(vol_raw) if vol_raw else None,
                 "spike_risk": bool(int(spike_raw)) if spike_raw else False,
                 "solar_soak": bool(int(soak_raw)) if soak_raw else False,
-                "charge_hold_discharge": action_raw.decode() if action_raw else "hold",
+                "charge_hold_discharge": action_raw.decode() if isinstance(action_raw, bytes) else (action_raw or "hold"),
             }
         except Exception as e:
             logger.warning(f"AU signals read failed {zone}: {e}")
+
+    if zone in NZ_ZONES:
+        try:
+            spread_raw = redis_client.get("elecz:nz_island_spread")
+            if spread_raw:
+                response["island_spread"] = json.loads(spread_raw)
+        except Exception as e:
+            logger.warning(f"NZ island spread read failed {zone}: {e}")
 
     return json.dumps(response, ensure_ascii=False)
 
