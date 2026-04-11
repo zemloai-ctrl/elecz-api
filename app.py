@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 ENTSOE_API_URL = "https://web-api.tp.entsoe.eu/api"
 FRANKFURTER_URL = "https://api.frankfurter.dev/v1/latest"
 AEMO_API_URL = "https://visualisations.aemo.com.au/aemo/apps/api/report/ELEC_NEM_SUMMARY"
-EA_RTD_API_URL = "https://emi.azure-api.net/real-time-dispatch/"
+EM6_FREE_API_URL = "https://api.em6.co.nz/ords/em6/data_api/price/free_24hrs/"
 
 # NZ reference nodes — industry standard proxies for NI/SI wholesale price
 NZ_REFERENCE_NODES = {
@@ -554,40 +554,47 @@ def fetch_aemo() -> list[dict]:
 
 # ─── EM6 helpers (NZ) ──────────────────────────────────────────────────────
 
-def fetch_ea_rtd() -> list[dict]:
-    """Fetch current NZ spot prices from EA Real-Time Dispatch API.
+def fetch_nz_spot() -> list[dict]:
+    """Fetch current NZ spot prices from EM6 free 24hrs API.
     Uses industry-standard reference nodes: HAY2201 (NI), BEN2201 (SI).
     Returns list of {zone, hour, price_ckwh, is_abnormal}.
-    EA prices are in NZD/MWh — divide by 10 to get NZD c/kWh.
-    No authentication required. 5-minute dispatch resolution.
-    API: https://emi.azure-api.net/real-time-dispatch/
-    Fields: PointOfConnectionCode, DollarsPerMegawattHour
+    Prices are in NZD/MWh — divide by 10 to get NZD c/kWh.
+    No authentication required.
+    Endpoint: https://api.em6.co.nz/ords/em6/data_api/price/free_24hrs/
+    Fields: node_id, price, timestamp
     """
-    now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+    try:
+        resp = httpx.get(EM6_FREE_API_URL, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        logger.error(f"EM6 free fetch failed: {e}")
+        return []
 
+    items = data.get("items", [])
+    if not items:
+        logger.warning("EM6 free returned empty items")
+        return []
+
+    # Find latest trading period for each reference node
+    node_latest = {}
+    for item in items:
+        node = item.get("node_id")
+        if node not in NZ_REFERENCE_NODES.values():
+            continue
+        ts = item.get("timestamp", "")
+        if node not in node_latest or ts > node_latest[node]["timestamp"]:
+            node_latest[node] = item
+
+    now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
     rows = []
     for nz_zone, node_id in NZ_REFERENCE_NODES.items():
-        try:
-            url = (
-                f"{EA_RTD_API_URL}"
-                f"?$filter=PointOfConnectionCode eq '{node_id}'"
-                f"&$orderby=FiveMinuteIntervalDatetime desc"
-                f"&$top=1"
-            )
-            resp = httpx.get(url, timeout=15, follow_redirects=True)
-            resp.raise_for_status()
-            data = resp.json()
-        except Exception as e:
-            logger.error(f"EA RTD fetch failed for {node_id}: {e}")
+        item = node_latest.get(node_id)
+        if not item:
+            logger.warning(f"EM6 free: node {node_id} not found for {nz_zone}")
             continue
-
-        if not data:
-            logger.warning(f"EA RTD: empty response for node {node_id}")
-            continue
-
         try:
-            latest = data[0] if isinstance(data, list) else data
-            price_nzd_mwh = float(latest["DollarsPerMegawattHour"])
+            price_nzd_mwh = float(item["price"])
             price_ckwh = round(price_nzd_mwh / 10, 4)
             is_abnormal = price_nzd_mwh > 5000.0 or price_nzd_mwh < -200.0
             rows.append({
@@ -596,11 +603,11 @@ def fetch_ea_rtd() -> list[dict]:
                 "price_ckwh": price_ckwh,
                 "is_abnormal": is_abnormal,
             })
-            logger.info(f"EA RTD {nz_zone} ({node_id}): {price_nzd_mwh} NZD/MWh = {price_ckwh} c/kWh")
-        except (KeyError, ValueError, TypeError, IndexError) as e:
-            logger.warning(f"EA RTD parse error node={node_id}: {e} — data: {str(data)[:200]}")
+            logger.info(f"EM6 {nz_zone} ({node_id}): {price_nzd_mwh} NZD/MWh = {price_ckwh} c/kWh")
+        except (KeyError, ValueError, TypeError) as e:
+            logger.warning(f"EM6 free parse error node={node_id}: {e}")
 
-    logger.info(f"EA RTD fetched {len(rows)} NZ zone prices")
+    logger.info(f"EM6 free fetched {len(rows)} NZ zone prices")
     return rows
 
 # ─── Spot price hot path ───────────────────────────────────────────────────
@@ -1350,7 +1357,7 @@ def update_nz_spot():
     Also computes island_spread (NI vs SI price divergence) and hvdc_direction.
     """
     logger.info("Updating NZ spot prices...")
-    rows = fetch_ea_rtd()
+    rows = fetch_nz_spot()
     if not rows:
         logger.warning("EM6 returned no rows")
         return
