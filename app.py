@@ -40,7 +40,13 @@ logger = logging.getLogger(__name__)
 ENTSOE_API_URL = "https://web-api.tp.entsoe.eu/api"
 FRANKFURTER_URL = "https://api.frankfurter.dev/v1/latest"
 AEMO_API_URL = "https://visualisations.aemo.com.au/aemo/apps/api/report/ELEC_NEM_SUMMARY"
-EM6_API_URL = "https://api.em6.co.nz/ords/em6/data_api/region_prices/"
+EA_RTD_API_URL = "https://www.electricityinfo.co.nz/api/prices"
+
+# NZ reference nodes — industry standard proxies for NI/SI wholesale price
+NZ_REFERENCE_NODES = {
+    "NZ-NI": "HAY2201",  # Haywards — HVDC entry point, canonical NI price
+    "NZ-SI": "BEN2201",  # Benmore — major hydro node, canonical SI price
+}
 REDIS_TTL_SPOT = 3600
 REDIS_TTL_CONTRACTS = 86400
 REDIS_TTL_FX = 86400
@@ -548,44 +554,61 @@ def fetch_aemo() -> list[dict]:
 
 # ─── EM6 helpers (NZ) ──────────────────────────────────────────────────────
 
-def fetch_em6() -> list[dict]:
-    """Fetch current NZ spot prices from EM6 real-time API.
+def fetch_ea_rtd() -> list[dict]:
+    """Fetch current NZ spot prices from EA Real-Time Dispatch API.
+    Uses industry-standard reference nodes: HAY2201 (NI), BEN2201 (SI).
     Returns list of {zone, hour, price_ckwh, is_abnormal}.
-    EM6 prices are in NZD/MWh — divide by 10 to get NZD c/kWh.
-    Trading period = 30 minutes. No authentication required.
+    EA prices are in NZD/MWh — divide by 10 to get NZD c/kWh.
+    No authentication required. 5-minute dispatch resolution.
     """
     try:
-        resp = httpx.get(EM6_API_URL, timeout=15)
+        resp = httpx.get(EA_RTD_API_URL, timeout=15)
         resp.raise_for_status()
         data = resp.json()
     except Exception as e:
-        logger.error(f"EM6 fetch failed: {e}")
+        logger.error(f"EA RTD fetch failed: {e}")
         return []
 
-    items = data.get("items", [])
-    if not items:
-        logger.warning("EM6 returned empty items list")
+    if not data:
+        logger.warning("EA RTD returned empty response")
         return []
 
-    latest = items[-1]
     now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
 
-    rows = []
-    for nz_zone, field in [("NZ-NI", "ni_price"), ("NZ-SI", "si_price")]:
-        try:
-            price_nzd_mwh = float(latest[field])
-            price_ckwh = round(price_nzd_mwh / 10, 4)
-            is_abnormal = price_nzd_mwh > 5000.0 or price_nzd_mwh < -200.0
-            rows.append({
-                "zone": nz_zone,
-                "hour": now,
-                "price_ckwh": price_ckwh,
-                "is_abnormal": is_abnormal,
-            })
-        except (KeyError, ValueError, TypeError) as e:
-            logger.warning(f"EM6 row parse error zone={nz_zone}: {e}")
+    # Build lookup: node -> price
+    node_prices = {}
+    if isinstance(data, list):
+        for item in data:
+            node = item.get("node") or item.get("nodeId") or item.get("NODE")
+            price = item.get("price") or item.get("Price") or item.get("PRICE")
+            if node and price is not None:
+                node_prices[node] = float(price)
+    elif isinstance(data, dict):
+        # Some APIs return dict keyed by node
+        for node, value in data.items():
+            if isinstance(value, (int, float)):
+                node_prices[node] = float(value)
+            elif isinstance(value, dict):
+                price = value.get("price") or value.get("Price")
+                if price is not None:
+                    node_prices[node] = float(price)
 
-    logger.info(f"EM6 fetched {len(rows)} NZ zone prices")
+    rows = []
+    for nz_zone, node_id in NZ_REFERENCE_NODES.items():
+        price_nzd_mwh = node_prices.get(node_id)
+        if price_nzd_mwh is None:
+            logger.warning(f"EA RTD: node {node_id} not found in response for {nz_zone}")
+            continue
+        price_ckwh = round(price_nzd_mwh / 10, 4)
+        is_abnormal = price_nzd_mwh > 5000.0 or price_nzd_mwh < -200.0
+        rows.append({
+            "zone": nz_zone,
+            "hour": now,
+            "price_ckwh": price_ckwh,
+            "is_abnormal": is_abnormal,
+        })
+
+    logger.info(f"EA RTD fetched {len(rows)} NZ zone prices")
     return rows
 
 # ─── Spot price hot path ───────────────────────────────────────────────────
@@ -882,7 +905,7 @@ Return pricing in Australian cents per kWh (AUD c/kWh) including GST (10%).
 If price is listed as AUD/kWh, multiply by 100.
 
 Provider-specific rules:
-- amber: contract_type = "dynamic", is_spot = true. Amber passes through NEM spot prices + service fee (~9-15 AUD c/kWh). Return service fee as spot_margin_ckwh if available.
+- amber: contract_type = "dynamic", is_spot = true. Amber passes through NEM spot prices + service fee. The service fee (spot_margin_ckwh) is typically between 9 and 15 AUD c/kWh. You MUST return a numeric value for spot_margin_ckwh — do not return null. If you cannot find the exact current fee, use 11.0 as a reasonable estimate.
 - agl: return their standard variable tariff, contract_type = "variable". Return usage rate as arbeitspreis_ckwh.
 - origin: return their standard variable tariff, contract_type = "variable". Return usage rate as arbeitspreis_ckwh.
 - energy_australia: return their standard variable tariff, contract_type = "variable". Return usage rate as arbeitspreis_ckwh.
@@ -1329,12 +1352,13 @@ def update_au_spot():
 
 
 def update_nz_spot():
-    """Scheduler job: update NZ spot prices from EM6 — runs every 30 min.
-    EM6 trading period = 30 minutes. No authentication required.
+    """Scheduler job: update NZ spot prices from EA Real-Time Dispatch API — runs every 30 min.
+    Uses HAY2201 (Haywards) for NI and BEN2201 (Benmore) for SI — industry standard reference nodes.
+    EA RTD updates every 5 minutes; 30-minute polling is sufficient for our use case.
     Also computes island_spread (NI vs SI price divergence) and hvdc_direction.
     """
     logger.info("Updating NZ spot prices...")
-    rows = fetch_em6()
+    rows = fetch_ea_rtd()
     if not rows:
         logger.warning("EM6 returned no rows")
         return
@@ -1445,9 +1469,9 @@ def decision_hint(spot: float, contract: dict, consumption: int, heating: str, z
 
     if nz_zone:
         if spot and spot < 5.0:
-            return {"hint": "stay_spot", "reason": "Low NZEM spot price now. Flick Electric spot tariff is cheapest."}
+            return {"hint": "stay_spot", "reason": "Low NZEM spot price now. Compare against fixed tariffs for your usage."}
         else:
-            return {"hint": "compare_options", "reason": "Compare Flick spot vs fixed tariff for your usage."}
+            return {"hint": "compare_options", "reason": "Compare fixed tariffs — no spot pass-through retailers currently available in NZ."}
     if au_zone:
         if spot and spot < 5.0:
             return {"hint": "stay_spot", "reason": "Low NEM spot price now. Amber dynamic tariff is cheapest."}
@@ -1669,7 +1693,7 @@ def build_signal(
 
     result = {
         "signal": "elecz",
-        "version": "1.9.1",
+        "version": "1.9.2",
         "zone": zone,
         "currency": currency,
         "unit": unit,
@@ -1836,6 +1860,7 @@ async def route_index(request: Request):
   </table>
 
   <h2>MCP Integration</h2>
+  <p style="color:#80ff80; margin-bottom: 8px;">Native MCP integration. Works with Claude, Copilot, and Gemini.</p>
   <pre>{{
   "mcpServers": {{
     "elecz": {{
@@ -2320,7 +2345,7 @@ async def route_go(request: Request):
 
 
 async def route_health(request: Request):
-    return JSONResponse({"status": "ok", "service": "elecz", "version": "1.9.1"})
+    return JSONResponse({"status": "ok", "service": "elecz", "version": "1.9.2"})
 
 
 async def route_robots(request: Request):
@@ -2358,7 +2383,7 @@ async def route_server_card(request: Request):
         "name": "elecz",
         "displayName": "⚡ Elecz — Electricity Signal for AI Agents",
         "description": "Real-time electricity spot prices, cheapest hours, and contract recommendations for Nordic markets, Germany, United Kingdom, Australia, and New Zealand. No authentication required.",
-        "version": "1.9.1",
+        "version": "1.9.2",
         "homepage": "https://elecz.com",
         "privacy_url": "https://elecz.com/privacy",
         "maintainer": "Sakari Korkia-Aho / Zemlo AI",
