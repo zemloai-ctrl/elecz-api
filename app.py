@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 ENTSOE_API_URL = "https://web-api.tp.entsoe.eu/api"
 FRANKFURTER_URL = "https://api.frankfurter.dev/v1/latest"
 AEMO_API_URL = "https://visualisations.aemo.com.au/aemo/apps/api/report/ELEC_NEM_SUMMARY"
-EA_RTD_API_URL = "https://www.electricityinfo.co.nz/api/prices"
+EA_RTD_API_URL = "https://emi.azure-api.net/real-time-dispatch/"
 
 # NZ reference nodes — industry standard proxies for NI/SI wholesale price
 NZ_REFERENCE_NODES = {
@@ -560,53 +560,45 @@ def fetch_ea_rtd() -> list[dict]:
     Returns list of {zone, hour, price_ckwh, is_abnormal}.
     EA prices are in NZD/MWh — divide by 10 to get NZD c/kWh.
     No authentication required. 5-minute dispatch resolution.
+    API: https://emi.azure-api.net/real-time-dispatch/
+    Fields: PointOfConnectionCode, DollarsPerMegawattHour
     """
-    try:
-        resp = httpx.get(EA_RTD_API_URL, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception as e:
-        logger.error(f"EA RTD fetch failed: {e}")
-        return []
-
-    if not data:
-        logger.warning("EA RTD returned empty response")
-        return []
-
     now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
-
-    # Build lookup: node -> price
-    node_prices = {}
-    if isinstance(data, list):
-        for item in data:
-            node = item.get("node") or item.get("nodeId") or item.get("NODE")
-            price = item.get("price") or item.get("Price") or item.get("PRICE")
-            if node and price is not None:
-                node_prices[node] = float(price)
-    elif isinstance(data, dict):
-        # Some APIs return dict keyed by node
-        for node, value in data.items():
-            if isinstance(value, (int, float)):
-                node_prices[node] = float(value)
-            elif isinstance(value, dict):
-                price = value.get("price") or value.get("Price")
-                if price is not None:
-                    node_prices[node] = float(price)
 
     rows = []
     for nz_zone, node_id in NZ_REFERENCE_NODES.items():
-        price_nzd_mwh = node_prices.get(node_id)
-        if price_nzd_mwh is None:
-            logger.warning(f"EA RTD: node {node_id} not found in response for {nz_zone}")
+        try:
+            url = (
+                f"{EA_RTD_API_URL}"
+                f"?$filter=PointOfConnectionCode eq '{node_id}'"
+                f"&$orderby=FiveMinuteIntervalDatetime desc"
+                f"&$top=1"
+            )
+            resp = httpx.get(url, timeout=15, follow_redirects=True)
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as e:
+            logger.error(f"EA RTD fetch failed for {node_id}: {e}")
             continue
-        price_ckwh = round(price_nzd_mwh / 10, 4)
-        is_abnormal = price_nzd_mwh > 5000.0 or price_nzd_mwh < -200.0
-        rows.append({
-            "zone": nz_zone,
-            "hour": now,
-            "price_ckwh": price_ckwh,
-            "is_abnormal": is_abnormal,
-        })
+
+        if not data:
+            logger.warning(f"EA RTD: empty response for node {node_id}")
+            continue
+
+        try:
+            latest = data[0] if isinstance(data, list) else data
+            price_nzd_mwh = float(latest["DollarsPerMegawattHour"])
+            price_ckwh = round(price_nzd_mwh / 10, 4)
+            is_abnormal = price_nzd_mwh > 5000.0 or price_nzd_mwh < -200.0
+            rows.append({
+                "zone": nz_zone,
+                "hour": now,
+                "price_ckwh": price_ckwh,
+                "is_abnormal": is_abnormal,
+            })
+            logger.info(f"EA RTD {nz_zone} ({node_id}): {price_nzd_mwh} NZD/MWh = {price_ckwh} c/kWh")
+        except (KeyError, ValueError, TypeError, IndexError) as e:
+            logger.warning(f"EA RTD parse error node={node_id}: {e} — data: {str(data)[:200]}")
 
     logger.info(f"EA RTD fetched {len(rows)} NZ zone prices")
     return rows
@@ -2029,7 +2021,7 @@ curl "https://elecz.com/signal/spot?zone=FI"</pre>
 
   <h3>Which electricity contract should I choose?</h3>
   <div class="prompt">"Should I switch my electricity contract? I'm in Auckland, New Zealand and use about 8000 kWh per year."</div>
-  <p>Elecz returns best spot contract (Flick Electric), best fixed, and a recommendation — with annual cost estimates and direct links.</p>
+  <p>Elecz returns best fixed contract options and a recommendation — with annual cost estimates and direct links.</p>
 
   <h2 id="tools">MCP Tools</h2>
   <table>
@@ -2068,8 +2060,8 @@ GET /signal/spot?zone=AU-NSW</pre>
   <h2 id="newzealand">🇳🇿 New Zealand</h2>
   <p>NZ spot prices are sourced from <strong>EM6</strong> real-time API — New Zealand Electricity Market (NZEM) wholesale prices, 30-minute trading periods, updated every 30 minutes by Elecz. Unit: NZD c/kWh.</p>
   <p><strong>Zones:</strong> NZ-NI (North Island) · NZ-SI (South Island)</p>
-  <p><strong>Providers:</strong> Flick Electric (spot-linked) · Mercury Energy · Contact Energy · Genesis Energy · Meridian Energy · Electric Kiwi</p>
-  <p><strong>Note:</strong> Day-ahead prices are not publicly available for NZ. <code>cheapest_hours</code> returns <code>available: false</code> for NZ zones.</p>
+  <p><strong>Providers:</strong> Mercury Energy · Contact Energy · Genesis Energy · Meridian Energy · Electric Kiwi</p>
+  <p><strong>Note:</strong> No spot pass-through retailers currently available in NZ. Flick Electric was acquired by Meridian Energy in July 2025.</p>
   <p><strong>Default consumption:</strong> 8000 kWh/year (NZ household average, electric heating common).</p>
   <pre>GET https://elecz.com/signal/spot?zone=NZ-NI
 GET https://elecz.com/signal?zone=NZ-NI&consumption=8000</pre>
@@ -2598,10 +2590,11 @@ def _mcp_prompt() -> str:
 
 ## NZ NOTES
 
-- NZ prices are in NZD c/kWh (NZEM wholesale price via EM6), updated every 30 minutes
+- NZ prices are in NZD c/kWh (NZEM wholesale price via EA Real-Time Dispatch API), updated every 30 minutes
 - Zones: NZ-NI (North Island), NZ-SI (South Island)
 - cheapest_hours is NOT available for NZ — no public day-ahead data
-- For NZ contract comparison, Flick Electric is the key spot-linked option
+- No spot pass-through retailers in NZ — Flick Electric acquired by Meridian July 2025
+- best_energy_contract returns fixed tariff comparison: Mercury, Contact, Genesis, Meridian, Electric Kiwi
 
 ## AU NOTES
 
