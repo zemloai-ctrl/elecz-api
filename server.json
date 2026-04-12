@@ -2,12 +2,12 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.zemloai-ctrl/elecz",
   "title": "Elecz Energy Signal",
-  "description": "Real-time electricity contracts for Germany & Nordics. Best deal, spot price, cheapest hours.",
+  "description": "Real-time electricity spot prices, cheapest hours, and contract comparison — 8 markets, 3 continents (FI, SE, NO, DK, DE, GB, AU, NZ). No authentication.",
   "repository": {
     "url": "https://github.com/zemloai-ctrl/elecz-api",
     "source": "github"
   },
-  "version": "1.0.2",
+  "version": "1.9.2",
   "remotes": [
     {
       "type": "streamable-http",
