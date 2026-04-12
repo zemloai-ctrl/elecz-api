@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.zemloai-ctrl/elecz",
   "title": "Elecz Energy Signal",
-  "description": "Real-time electricity spot prices, cheapest hours, and contract comparison — 8 markets, 3 continents (FI, SE, NO, DK, DE, GB, AU, NZ). No authentication.",
+  "description": "Real-time electricity spot prices, cheapest hours, and contract comparison — 8 markets, 2 continents (FI, SE, NO, DK, DE, GB, AU, NZ). No authentication.",
   "repository": {
     "url": "https://github.com/zemloai-ctrl/elecz-api",
     "source": "github"
