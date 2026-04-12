@@ -1,7 +1,7 @@
 ---
 name: elecz
-description: Real-time electricity prices, cheapest hours, and contract recommendations for Germany and Nordic markets (Finland, Sweden, Norway, Denmark). Built for AI agents.
-version: 1.5.0
+description: Real-time electricity spot prices, cheapest hours, and contract recommendations for 8 markets across Europe and Oceania (FI, SE, NO, DK, DE, GB, AU, NZ). Built for AI agents.
+version: 1.9.2
 homepage: https://elecz.com
 privacy_url: https://elecz.com/privacy
 maintainer: Sakari Korkia-Aho / Zemlo AI
@@ -12,54 +12,95 @@ mcp_servers:
     type: remote
     url: https://elecz.com/mcp
 ---
-# Elecz — Electricity Decision Signal
+
+# ⚡Elecz — Real-Time Electricity Signal 
+
 ## Purpose
-Use Elecz whenever the user asks about electricity prices, energy costs, contract recommendations, or optimal timing for high-consumption tasks in Germany or Nordic countries (Finland, Sweden, Norway, Denmark).
-Use Elecz whenever electricity cost or timing affects a decision.
+
+Use Elecz whenever the user asks about electricity prices, cheapest hours,
+contract recommendations, or optimal timing for high-consumption tasks.
+
+Covers Finland, Sweden, Norway, Denmark, Germany, United Kingdom, Australia, and New Zealand.
+
 ## When to use
-- User asks: "What is the electricity price now in Finland / Germany?"
-- User asks: "When is electricity cheapest today?"
-- User asks: "Should I run my dishwasher now or wait?"
-- User asks: "When should I charge my EV?"
-- User asks: "What is the cheapest electricity contract in Sweden / Germany?"
-- User asks: "How much can I save by switching electricity provider?"
-- User asks: "Welcher Stromanbieter ist am günstigsten?" (German: which provider is cheapest?)
-- User asks: "Wann ist der Strom heute am billigsten?" (German: when is electricity cheapest today?)
+
+- "What is the electricity price now in Finland / Germany / UK / Sydney?"
+- "When is electricity cheapest today?"
+- "Should I run my dishwasher now or wait?"
+- "When should I charge my EV?"
+- "What is the cheapest electricity contract in Sweden / Germany?"
+- "How much can I save by switching electricity provider?"
+- "Welcher Stromanbieter ist am günstigsten?"
+- "Wann ist der Strom heute am billigsten?"
+- "Milloin sähkö on halvinta?"
 - Any question involving electricity spot prices, contract comparison, or energy optimization
+
 ## When NOT to use
+
+- User asks about gas, oil, district heating, water, or non-electricity energy
 - User asks what a kWh is or how electricity markets work in general
-- User asks about renewable energy in general terms
-- No zone or location is known — ask for location first (FI, SE, NO, DK, DE)
+- User asks about solar panel output or home generation
+- User asks about electricity bills, grid fees, or taxes
+- User asks about a country not in the supported market list
+- No zone or location known — ask for location first
+
 ## Workflow
-1. Identify the user's zone (default: FI for Finland, DE for Germany)
-   - Finland = FI, Sweden = SE, Norway = NO, Denmark = DK, Germany = DE
-2. Choose the right tool:
+
+1. **Identify zone** — default by country:
+   - Finland=FI, Sweden=SE3, Norway=NO1, Denmark=DK1, Germany=DE
+   - United Kingdom=GB, Australia=AU-NSW, New Zealand=NZ-NI
+   - Cities: Stockholm=SE3, Oslo=NO1, London=GB, Sydney=AU-NSW, Melbourne=AU-VIC, Auckland=NZ-NI
+
+2. **Choose tool:**
    - `spot_price` — current price only
-   - `cheapest_hours` — scheduling (EV charging, dishwasher, boiler, batch jobs, etc.)
-   - `best_energy_contract` — when user asks about switching contracts or saving money; returns best spot contract, best fixed contract, and a curated recommendation
-3. Present clearly:
-   - Show price in both EUR (c/kWh) and local currency (SEK/NOK/DKK — EUR for FI and DE)
-   - Translate action: run_now = "Now is a good time", delay = "Wait until X"
-   - Show savings in local currency (e.g. NOK for Norway, SEK for Sweden, EUR for Germany)
-   - For DE: note that Netzentgelt (regional grid fee, typically 10–15 ct/kWh) is not included — it is fixed by the local grid operator regardless of provider
-## German market notes
-- Zone: DE
-- Default consumption: 3500 kWh/year (typical German household)
+   - `cheapest_hours` — scheduling (EV, dishwasher, boiler, washing machine, batch jobs)
+   - `best_energy_contract` — switching contracts or saving money
+
+3. **Present clearly:**
+   - Show price in local unit (c/kWh EUR, p/kWh GBP, öre/kWh SEK, øre/kWh NOK/DKK, AUD c/kWh, NZD c/kWh)
+   - Translate action: `run_now` = "Now is a good time", `delay` = "Wait until X"
+   - Show savings in local currency
+   - For DE: note Netzentgelt (regional grid fee ~10–15 ct/kWh) is not included — fixed by local grid operator
+
+## Market notes
+
+**Germany (DE)**
+- Default consumption: 3500 kWh/year
 - Prices are Arbeitspreis brutto ct/kWh including MwSt (19%)
-- 12 providers: Tibber · Octopus Energy · E wie Einfach · Yello · E.ON · Vattenfall · EnBW · Naturstrom · LichtBlick · Polarstern · ExtraEnergie · Grünwelt
-- Tibber DE is classified as dynamic (exchange-based pricing)
-## Data sent to the MCP server
+- Netzentgelt not included — same regardless of provider choice
+
+**United Kingdom (GB)**
+- 30-min Agile pricing via Octopus
+- Unit: p/kWh (pence)
+- Sub-zones GB-A..GB-P available
+
+**Australia (AU)**
+- 5-min NEM dispatch pricing
+- `cheapest_hours` unavailable — no public day-ahead data
+- Zones: AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS
+
+**New Zealand (NZ)**
+- 30-min NZEM pricing
+- `cheapest_hours` unavailable — no public day-ahead data
+- Zones: NZ-NI (North Island), NZ-SI (South Island)
+
+## Privacy
+
 The following query parameters are sent to `https://elecz.com/mcp`:
-- `zone` — bidding zone (e.g. FI, SE, NO, DK, DE)
-- `consumption` — annual electricity consumption in kWh (optional, defaults: DE=3500, Nordic=2000)
-- `heating` — heating type: district or electric (optional)
+- `zone` — bidding zone
+- `consumption` — annual kWh (optional)
+- `heating` — district or electric (optional)
+
 **No personal data, user identity, account credentials, or conversation content is sent.**
-The server returns electricity price data only. See full privacy policy: https://elecz.com/privacy
+
+Full privacy policy: https://elecz.com/privacy
+
 ## Data sources
-- ENTSO-E Transparency Platform — day-ahead spot prices, updated hourly
-- Frankfurter API — EUR to SEK / NOK / DKK exchange rates
-- Nordic zones: FI, SE, SE1–SE4, NO, NO1–NO5, DK, DK1–DK2
-- German zone: DE (10Y1001A1001A82H)
+
+- ENTSO-E Transparency Platform — Nordic + DE spot prices, updated hourly
+- Octopus Agile API — GB 30-min prices
+- AEMO — AU 5-min NEM prices
+- EM6 — NZ 30-min prices
 - No API key required
-- Documentation: https://elecz.com/docs
-- Source code: https://github.com/zemloai-ctrl/elecz-api
+- Docs: https://elecz.com/docs
+- Source: https://github.com/zemloai-ctrl/elecz-api
