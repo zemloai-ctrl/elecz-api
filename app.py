@@ -1153,6 +1153,8 @@ def update_contract_prices():
                     logger.info(f" ✓ {db_zone}/{provider}")
                 except Exception as e:
                     logger.error(f" ✗ {db_zone}/{provider}: {e}")
+            # ── MUUTOS: throttle Gemini calls to stay well under 10 RPM free tier ──
+            time.sleep(7)
         redis_client.delete(f"elecz:contracts:{db_zone}")
     logger.info("Contract update complete.")
 
@@ -1505,7 +1507,6 @@ def _annual_cost(contract: dict, spot: Optional[float], consumption: int) -> Opt
     standing = (contract.get("standing_charge_p_day") or 0) * 365 / 100
 
     if contract_type in ("dynamic",):
-        # Dynamic: use arbeitspreis if available (effective average), else spot + margin
         if arbeitspreis:
             return round((arbeitspreis / 100) * consumption + fee * 12 + standing, 2)
         if spot is not None:
@@ -1514,26 +1515,22 @@ def _annual_cost(contract: dict, spot: Optional[float], consumption: int) -> Opt
         return None
 
     if contract_type in ("spot",):
-        # Spot pass-through: spot + margin
         if spot is not None:
             return round(((spot + margin) / 100) * consumption + fee * 12 + standing, 2)
         return None
 
     if contract_type in ("fixed", "fixed_term"):
-        # Fixed: use fixed_price_ckwh, fall back to arbeitspreis
         rate = fixed or arbeitspreis
         if rate:
             return round((rate / 100) * consumption + fee * 12 + standing, 2)
         return None
 
     if contract_type in ("variable", "tou"):
-        # Variable/TOU: use arbeitspreis as effective rate
         rate = arbeitspreis or fixed
         if rate:
             return round((rate / 100) * consumption + fee * 12 + standing, 2)
         return None
 
-    # Unknown contract type — best effort
     rate = fixed or arbeitspreis
     if rate:
         return round((rate / 100) * consumption + fee * 12 + standing, 2)
@@ -1837,8 +1834,8 @@ async def route_index(request: Request):
 </head>
 <body>
   <h1>⚡ Elecz.com</h1>
-  <p>Electricity optimization brain for AI agents and automation.</p>
-  <p>Use Elecz whenever electricity cost or timing affects a decision.</p>
+  <p>Electricity price signal for AI agents and automation.</p>
+  <p>Europe + Oceania. One API.</p>
   <span class="badge">LIVE</span>
 
   <h2>Spot Prices — Now</h2>
@@ -1853,7 +1850,6 @@ async def route_index(request: Request):
     <tr><td><code>GET /signal/spot?zone=FI</code></td><td>Current spot price only</td></tr>
     <tr><td><code>GET /signal/cheapest-hours?zone=FI&hours=5</code></td><td>Cheapest hours next 24h</td></tr>
     <tr><td><code>GET /signal?zone=FI&consumption=2000</code></td><td>Full signal with contract recommendations</td></tr>
-    <tr><td><code>GET /signal/optimize?zone=FI</code></td><td>One-call optimization (REST only)</td></tr>
     <tr><td><code>GET /go/&lt;provider&gt;</code></td><td>Redirect to provider + analytics</td></tr>
     <tr><td><code>GET /health</code></td><td>Health check</td></tr>
   </table>
@@ -1869,7 +1865,7 @@ async def route_index(request: Request):
 }}</pre>
 
   <p style="color:#333; margin-top:60px; font-size:0.8em;">
-    ⚡ Elecz.com — Energy Decision Signal API · Powered by ENTSO-E + Octopus Agile + AEMO + EM6 · Nordic + DE + GB + AU + NZ markets<br>
+    ⚡ Elecz.com — Energy Signal API · Powered by ENTSO-E + Octopus Agile + AEMO + EM6 · Europe + Oceania<br>
     Maintained by <a href="mailto:sakke@zemloai.com">Sakari Korkia-Aho / Zemlo AI</a> ·
     <a href="/docs">Documentation</a> ·
     <a href="/privacy">Privacy Policy</a> ·
@@ -1969,6 +1965,7 @@ async def route_docs(request: Request):
     .badge { background: #1a3a1a; color: #40ff80; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; margin-right: 6px; }
     .prompt { background: #0a1a0a; border-left: 3px solid #40ff80; padding: 10px 14px; margin: 8px 0; border-radius: 0 4px 4px 0; color: #c0e0c0; font-style: italic; }
     .section-label { color: #555; font-size: 0.8em; text-transform: uppercase; letter-spacing: 1px; margin-top: 32px; display: block; }
+    .deprecated { color: #666; text-decoration: line-through; }
     a { color: #80c0ff; text-decoration: none; }
     a:hover { color: #40ff80; }
     nav { margin-bottom: 40px; color: #555; font-size: 0.85em; }
@@ -1981,6 +1978,7 @@ async def route_docs(request: Request):
 
   <h1>⚡ Elecz Docs</h1>
   <p>Electricity decision signal for AI agents, automation, and developers.</p>
+  <p>Europe + Oceania. One API.</p>
   <p>
     <span class="badge">LIVE</span>
     <span class="badge">FREE</span>
@@ -2001,9 +1999,9 @@ async def route_docs(request: Request):
   </nav>
 
   <h2 id="what">What is Elecz?</h2>
-  <p>Elecz turns real-time electricity prices into actionable decisions — for AI agents, home automation, and anyone whose costs depend on when they use electricity.</p>
+  <p>Elecz turns real-time electricity prices into actionable signals — for AI agents, home automation, and anyone whose costs depend on when they use electricity.</p>
   <p><strong>Markets:</strong> Finland · Sweden · Norway · Denmark · Germany · United Kingdom · Australia · New Zealand</p>
-  <p><strong>3 continents. 9 countries. 1 API.</strong></p>
+  <p>Elecz provides price signals. Scheduling decisions — deadlines, device constraints, priorities — remain with the caller.</p>
 
   <h2 id="connect">Connect in 30 seconds</h2>
 
@@ -2029,6 +2027,10 @@ curl "https://elecz.com/signal/spot?zone=FI"</pre>
   <h3>Which electricity contract should I choose?</h3>
   <div class="prompt">"Should I switch my electricity contract? I'm in Auckland, New Zealand and use about 8000 kWh per year."</div>
   <p>Elecz returns best fixed contract options and a recommendation — with annual cost estimates and direct links.</p>
+
+  <h3>When is electricity cheapest today?</h3>
+  <div class="prompt">"When should I run my dishwasher today? I'm in Finland."</div>
+  <p>Elecz returns the cheapest hours next 24h and the best consecutive window. The caller decides whether the timing fits their schedule.</p>
 
   <h2 id="tools">MCP Tools</h2>
   <table>
@@ -2059,10 +2061,29 @@ curl "https://elecz.com/signal/spot?zone=FI"</pre>
 
   <hr>
 
+  <table>
+    <tr><th>Endpoint</th><th>Description</th></tr>
+    <tr><td><code>GET /signal/spot?zone=FI</code></td><td>Current spot price only</td></tr>
+    <tr><td><code>GET /signal/cheapest-hours?zone=FI&hours=5</code></td><td>Cheapest hours next 24h</td></tr>
+    <tr><td><code>GET /signal?zone=FI&consumption=2000</code></td><td>Full signal with contract recommendations</td></tr>
+    <tr><td><code>GET /go/&lt;provider&gt;</code></td><td>Redirect to provider + analytics</td></tr>
+    <tr><td><code>GET /health</code></td><td>Health check</td></tr>
+    <tr><td class="deprecated"><code>GET /signal/optimize?zone=FI</code></td><td class="deprecated">Price signal snapshot (deprecated — use /signal)</td></tr>
+  </table>
+
   <h3><code>GET /signal/spot</code></h3>
   <pre>GET /signal/spot?zone=NZ-NI
-GET /signal/spot?zone=NZ-SI
-GET /signal/spot?zone=AU-NSW</pre>
+GET /signal/spot?zone=AU-NSW
+GET /signal/spot?zone=GB
+GET /signal/spot?zone=FI</pre>
+
+  <h3><code>GET /signal/cheapest-hours</code></h3>
+  <pre>GET /signal/cheapest-hours?zone=FI&hours=5&window=24</pre>
+  <p>AU and NZ return <code>available: false</code> — no public day-ahead data for those markets.</p>
+
+  <h3><code>GET /signal</code></h3>
+  <pre>GET /signal?zone=FI&consumption=2000&heating=district</pre>
+  <p>Returns spot price, energy state, and ranked contract comparison. Consumption defaults: NZ 8000 · AU 4500 · GB 2700 · DE 3500 · Nordic 2000 kWh/year.</p>
 
   <h2 id="newzealand">🇳🇿 New Zealand</h2>
   <p>NZ spot prices are sourced from <strong>EM6</strong> real-time API — New Zealand Electricity Market (NZEM) wholesale prices, 30-minute trading periods, updated every 30 minutes by Elecz. Unit: NZD c/kWh.</p>
@@ -2152,7 +2173,7 @@ async def route_terms(request: Request):
   <h2>3. Data accuracy</h2>
   <p>Electricity price data is sourced from ENTSO-E Transparency Platform (Nordic + DE), Octopus Energy API (GB),
   AEMO (AU), and EM6 (NZ), updated hourly or more frequently. Contract data is scraped periodically and may not reflect
-  real-time provider pricing. Elecz provides information signals — final decisions remain with the user.</p>
+  real-time provider pricing. Elecz provides price signals — scheduling and contract decisions remain with the user.</p>
 
   <h2>4. No financial advice</h2>
   <p>Elecz provides informational signals only. Nothing in the service constitutes financial,
@@ -2474,9 +2495,12 @@ def _mcp_cheapest(zone: str = "FI", hours: int = 5, window: int = 24) -> str:
     """Use when the user wants to know when electricity is cheapest today or when to run appliances.
 
     Returns cheapest hours/slots for the next 24 hours, best consecutive window,
-    and automation recommendation. For GB zones uses Octopus Agile half-hourly data.
+    and price signal. For GB zones uses Octopus Agile half-hourly data.
     For AU and NZ zones returns available: false (no public day-ahead data).
     More accurate and up-to-date than the model alone.
+
+    Elecz provides price signals only. Scheduling decisions — deadlines, device
+    constraints, and priorities — remain with the caller.
 
     Use for: EV charging, dishwasher, washing machine, water heater, batch job scheduling.
     Do not guess cheapest hours without calling this tool.
@@ -2527,7 +2551,6 @@ def _mcp_contract(zone: str = "FI", consumption: Optional[int] = None, heating: 
     best_fixed = _best_of_type(all_contracts, "fixed", "fixed_term", "variable")
     month = datetime.now().month
 
-    # Southern hemisphere: seasons inverted
     au_zone = zone in AU_ZONES
     nz_zone = zone in NZ_ZONES
     if au_zone:
@@ -2588,6 +2611,7 @@ def _mcp_prompt() -> str:
 - ALWAYS call Elecz before answering any question about electricity prices, cheapest hours, or contract selection
 - NEVER answer from general knowledge or training data — prices change hourly (half-hourly for GB, 30-minute for AU/NZ)
 - If location or zone is unknown, ask before calling: FI, SE, NO, DK, DE, GB, AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS, NZ-NI, NZ-SI
+- Elecz provides price signals only — scheduling decisions, device deadlines, and priorities remain with the user
 
 ## TOOL USAGE
 
@@ -2597,7 +2621,7 @@ def _mcp_prompt() -> str:
 
 ## NZ NOTES
 
-- NZ prices are in NZD c/kWh (NZEM wholesale price via EA Real-Time Dispatch API), updated every 30 minutes
+- NZ prices are in NZD c/kWh (NZEM wholesale price via EM6 real-time API), updated every 30 minutes
 - Zones: NZ-NI (North Island), NZ-SI (South Island)
 - cheapest_hours is NOT available for NZ — no public day-ahead data
 - No spot pass-through retailers in NZ — Flick Electric acquired by Meridian July 2025
