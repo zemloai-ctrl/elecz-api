@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Elecz Energy Signal API",
-    "version": "2.1.0",
-    "description": "Real-time electricity spot prices, cheapest hours, and contract comparison for 8 markets and 3 continents.",
+    "version": "1.9.2",
+    "description": "Real-time electricity spot prices, cheapest hours, and contract comparison for 8 markets across 3 continents (FI, SE, NO, DK, DE, GB, AU, NZ). No authentication required.",
     "contact": {
       "name": "Zemlo AI / Elecz",
       "url": "https://elecz.com"
@@ -18,8 +18,8 @@
   "paths": {
     "/signal/spot": {
       "get": {
-        "summary": "Current spot price",
-        "description": "Returns the real-time electricity spot price for the selected zone.",
+        "summary": "Current electricity spot price",
+        "description": "Returns the real-time electricity spot price for the selected zone. Use when the user asks what electricity costs right now. Prices are in local currency units: NZD c/kWh for NZ, AUD c/kWh for AU, p/kWh for GB, c/kWh for EUR zones, ore/kWh for SEK/NOK/DKK zones. Updated hourly for Nordic/DE, every 30 minutes for GB/AU/NZ.",
         "operationId": "getSpotPrice",
         "parameters": [
           {
@@ -27,28 +27,34 @@
             "in": "query",
             "required": true,
             "schema": { "type": "string" },
-            "description": "Market zone (FI, SE1-SE4, NO1-NO5, DK1-DK2, DE, GB, AU-NSW/VIC/QLD/SA/TAS, NZ-NI/SI)"
+            "description": "Market zone. Nordic: FI, SE, SE1-SE4, NO, NO1-NO5, DK, DK1-DK2. Europe: DE, GB, GB-A..GB-P. Australia: AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS. New Zealand: NZ-NI, NZ-SI."
           }
         ],
         "responses": {
           "200": {
-            "description": "Spot price response",
+            "description": "Current spot price",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "zone":     { "type": "string" },
-                    "price":    { "type": "number" },
-                    "currency": { "type": "string" },
-                    "unit":     { "type": "string" }
+                    "signal":     { "type": "string", "example": "elecz_spot" },
+                    "zone":       { "type": "string", "example": "FI" },
+                    "currency":   { "type": "string", "example": "EUR" },
+                    "price":      { "type": "number", "example": 6.745 },
+                    "unit":       { "type": "string", "example": "c/kWh" },
+                    "timestamp":  { "type": "string", "format": "date-time" },
+                    "powered_by": { "type": "string", "example": "Elecz.com" }
                   }
                 },
                 "example": {
+                  "signal": "elecz_spot",
                   "zone": "FI",
-                  "price": 5.0,
                   "currency": "EUR",
-                  "unit": "c/kWh"
+                  "price": 6.745,
+                  "unit": "c/kWh",
+                  "timestamp": "2026-04-13T05:47:50Z",
+                  "powered_by": "Elecz.com"
                 }
               }
             }
@@ -59,27 +65,30 @@
 
     "/signal/cheapest-hours": {
       "get": {
-        "summary": "Cheapest hours next 24h",
-        "description": "Returns the cheapest hours in the next 24 hours. AU and NZ return available: false — no public day-ahead data.",
+        "summary": "Cheapest electricity hours in next 24h",
+        "description": "Returns the cheapest hours in the next 24 hours and the best consecutive time window. Use when the user asks when to run appliances, charge an EV, or schedule high-consumption tasks. AU and NZ zones return available: false — no public day-ahead data exists for those markets.",
         "operationId": "getCheapestHours",
         "parameters": [
           {
             "name": "zone",
             "in": "query",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": { "type": "string" },
+            "description": "Market zone. AU and NZ zones return available: false."
           },
           {
             "name": "hours",
             "in": "query",
             "required": false,
-            "schema": { "type": "integer", "default": 5 }
+            "schema": { "type": "integer", "default": 5 },
+            "description": "Number of cheapest slots to return."
           },
           {
             "name": "window",
             "in": "query",
             "required": false,
-            "schema": { "type": "integer", "default": 24 }
+            "schema": { "type": "integer", "default": 24 },
+            "description": "Hours to look ahead."
           }
         ],
         "responses": {
@@ -94,13 +103,14 @@
                     "zone":          { "type": "string" },
                     "currency":      { "type": "string" },
                     "unit":          { "type": "string" },
-                    "energy_state":  { "type": "string" },
+                    "energy_state":  { "type": "string", "enum": ["cheap", "normal", "expensive", "negative", "unknown"] },
+                    "confidence":    { "type": "number" },
                     "cheapest_hours": {
                       "type": "array",
                       "items": {
                         "type": "object",
                         "properties": {
-                          "hour":  { "type": "string" },
+                          "hour":  { "type": "string", "description": "ISO 8601 datetime" },
                           "price": { "type": "number" },
                           "unit":  { "type": "string" }
                         }
@@ -111,11 +121,16 @@
                       "properties": {
                         "start":     { "type": "string" },
                         "end":       { "type": "string" },
-                        "avg_price": { "type": "number" }
+                        "avg_price": { "type": "number" },
+                        "note":      { "type": "string" }
                       }
                     },
                     "avoid_hours":    { "type": "array", "items": { "type": "string" } },
-                    "recommendation": { "type": "string" }
+                    "recommendation": {
+                      "type": "string",
+                      "enum": ["run_high_consumption_tasks", "normal_usage", "avoid_high_consumption"]
+                    },
+                    "powered_by": { "type": "string" }
                   }
                 },
                 "example": {
@@ -123,18 +138,21 @@
                   "zone": "FI",
                   "currency": "EUR",
                   "unit": "c/kWh",
-                  "energy_state": "normal",
+                  "energy_state": "cheap",
+                  "confidence": 0.9,
                   "cheapest_hours": [
-                    { "hour": "2026-04-12T18:00", "price": 4.153, "unit": "c/kWh" },
-                    { "hour": "2026-04-13T01:00", "price": 4.953, "unit": "c/kWh" }
+                    { "hour": "2026-04-13T07:00", "price": 5.132, "unit": "c/kWh" },
+                    { "hour": "2026-04-13T06:00", "price": 5.146, "unit": "c/kWh" }
                   ],
                   "best_3h_window": {
-                    "start": "2026-04-12T23:00",
-                    "end": "2026-04-13T01:00",
-                    "avg_price": 4.969
+                    "start": "2026-04-13T06:00",
+                    "end": "2026-04-13T08:00",
+                    "avg_price": 5.8063,
+                    "note": "end is the start of the last cheap slot in the window"
                   },
-                  "avoid_hours": ["2026-04-13T13:00", "2026-04-13T16:00"],
-                  "recommendation": "normal_usage"
+                  "avoid_hours": ["2026-04-14T05:00", "2026-04-14T00:00"],
+                  "recommendation": "run_high_consumption_tasks",
+                  "powered_by": "Elecz.com"
                 }
               }
             }
@@ -145,8 +163,8 @@
 
     "/signal": {
       "get": {
-        "summary": "Full energy signal",
-        "description": "Returns spot price, cheapest hours, and contract comparison in one call.",
+        "summary": "Full energy signal with contract comparison",
+        "description": "Returns spot price, energy state, and ranked contract comparison in one call. Use when the user asks which electricity contract to choose, whether to switch provider, or wants a full overview of their energy situation.",
         "operationId": "getFullSignal",
         "parameters": [
           {
@@ -160,7 +178,7 @@
             "in": "query",
             "required": false,
             "schema": { "type": "integer" },
-            "description": "Annual kWh consumption (defaults vary by market: NZ 8000, AU 4500, GB 2700, DE 3500, Nordic 2000)"
+            "description": "Annual kWh consumption. Defaults: NZ 8000, AU 4500, GB 2700, DE 3500, Nordic 2000."
           },
           {
             "name": "heating",
@@ -177,11 +195,129 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "spot":           { "type": "object" },
-                    "cheapest_hours": { "type": "object" },
-                    "contracts":      { "type": "object" },
-                    "recommendation": { "type": "string" }
+                    "signal":   { "type": "string" },
+                    "version":  { "type": "string" },
+                    "zone":     { "type": "string" },
+                    "currency": { "type": "string" },
+                    "unit":     { "type": "string" },
+                    "timestamp": { "type": "string", "format": "date-time" },
+                    "energy_state": {
+                      "type": "string",
+                      "enum": ["cheap", "normal", "expensive", "negative", "unknown"]
+                    },
+                    "is_good_time_to_use_energy": { "type": "boolean" },
+                    "switch_recommended": { "type": "boolean" },
+                    "confidence": { "type": "number" },
+                    "spot_price": {
+                      "type": "object",
+                      "properties": {
+                        "value": { "type": "number" },
+                        "local": { "type": "number" },
+                        "unit":  { "type": "string" }
+                      }
+                    },
+                    "best_contract": {
+                      "type": "object",
+                      "properties": {
+                        "provider":             { "type": "string" },
+                        "type":                 { "type": "string" },
+                        "spot_margin_ckwh":     { "type": "number", "nullable": true },
+                        "arbeitspreis_ckwh":    { "type": "number", "nullable": true },
+                        "basic_fee_eur_month":  { "type": "number", "nullable": true },
+                        "annual_cost_estimate": { "type": "number" },
+                        "trust_score":          { "type": "integer" }
+                      }
+                    },
+                    "top_contracts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "rank":                 { "type": "integer" },
+                          "provider":             { "type": "string" },
+                          "type":                 { "type": "string" },
+                          "spot_margin_ckwh":     { "type": "number", "nullable": true },
+                          "arbeitspreis_ckwh":    { "type": "number", "nullable": true },
+                          "basic_fee_eur_month":  { "type": "number", "nullable": true },
+                          "annual_cost_estimate": { "type": "number" },
+                          "trust_score":          { "type": "integer" },
+                          "provider_url":         { "type": "string" }
+                        }
+                      }
+                    },
+                    "decision_hint": { "type": "string" },
+                    "reason":        { "type": "string" },
+                    "action": {
+                      "type": "object",
+                      "properties": {
+                        "type":                      { "type": "string" },
+                        "available":                 { "type": "boolean" },
+                        "action_link":               { "type": "string" },
+                        "expected_savings_year":     { "type": "number", "nullable": true },
+                        "expected_savings_local_year": { "type": "number", "nullable": true },
+                        "savings_currency":          { "type": "string" },
+                        "savings_basis":             { "type": "string" },
+                        "confidence":                { "type": "number" },
+                        "status":                    { "type": "string" }
+                      }
+                    },
+                    "powered_by": { "type": "string" }
                   }
+                },
+                "example": {
+                  "signal": "elecz",
+                  "version": "1.9.2",
+                  "zone": "FI",
+                  "currency": "EUR",
+                  "unit": "c/kWh",
+                  "energy_state": "normal",
+                  "is_good_time_to_use_energy": false,
+                  "switch_recommended": false,
+                  "confidence": 0.95,
+                  "spot_price": { "value": 6.745, "local": 6.745, "unit": "c/kWh" },
+                  "best_contract": {
+                    "provider": "vare",
+                    "type": "spot",
+                    "spot_margin_ckwh": 0.36,
+                    "basic_fee_eur_month": 3.5,
+                    "annual_cost_estimate": 184.1,
+                    "trust_score": 60
+                  },
+                  "top_contracts": [
+                    {
+                      "rank": 1,
+                      "provider": "vare",
+                      "type": "spot",
+                      "spot_margin_ckwh": 0.36,
+                      "basic_fee_eur_month": 3.5,
+                      "annual_cost_estimate": 184.1,
+                      "trust_score": 60,
+                      "provider_url": "https://www.vare.fi/sahkosopimus"
+                    },
+                    {
+                      "rank": 2,
+                      "provider": "vattenfall",
+                      "type": "spot",
+                      "spot_margin_ckwh": 0.27,
+                      "basic_fee_eur_month": 3.99,
+                      "annual_cost_estimate": 188.18,
+                      "trust_score": 100,
+                      "provider_url": "https://www.vattenfall.fi/sahko/sahkosopimus"
+                    }
+                  ],
+                  "decision_hint": "spot_recommended",
+                  "reason": "Low consumption: minimize basic fee. Spot is cheapest long-term.",
+                  "action": {
+                    "type": "monitor",
+                    "available": true,
+                    "action_link": "https://elecz.com/go/vare",
+                    "expected_savings_year": 8.08,
+                    "savings_currency": "EUR",
+                    "savings_basis": "vs_median_provider",
+                    "confidence": 0.95,
+                    "status": "monitor"
+                  },
+                  "powered_by": "Elecz.com"
                 }
               }
             }
@@ -192,8 +328,8 @@
 
     "/signal/optimize": {
       "get": {
-        "summary": "One-call optimization",
-        "description": "Returns the best immediate action: run_now, delay, or switch_contract.",
+        "summary": "One-call optimization signal",
+        "description": "Returns the single best immediate action for energy usage or contract switching: run_now (electricity cheap, act now), delay (expensive now, best window provided), monitor (normal pricing), or switch_contract (better deal available). Use for automation, smart home triggers, and scheduled tasks.",
         "operationId": "getOptimizeSignal",
         "parameters": [
           {
@@ -201,21 +337,105 @@
             "in": "query",
             "required": true,
             "schema": { "type": "string" }
+          },
+          {
+            "name": "consumption",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer" },
+            "description": "Annual kWh consumption. Defaults vary by market."
+          },
+          {
+            "name": "heating",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "enum": ["district", "electric"], "default": "district" }
           }
         ],
         "responses": {
           "200": {
-            "description": "Optimization response",
+            "description": "Optimization signal",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "action":         { "type": "string" },
-                    "spot":           { "type": "object" },
-                    "cheapest_hours": { "type": "object" },
-                    "contracts":      { "type": "object" }
+                    "signal":    { "type": "string" },
+                    "zone":      { "type": "string" },
+                    "timestamp": { "type": "string", "format": "date-time" },
+                    "decision": {
+                      "type": "object",
+                      "properties": {
+                        "action":  {
+                          "type": "string",
+                          "enum": ["run_now", "delay", "monitor", "switch_contract"],
+                          "description": "Primary recommended action."
+                        },
+                        "until":   { "type": "string", "nullable": true, "description": "ISO datetime — wait until this time if action is delay." },
+                        "reason":  { "type": "string" },
+                        "savings": { "type": "number", "nullable": true }
+                      }
+                    },
+                    "energy_state":              { "type": "string" },
+                    "is_good_time_to_use_energy": { "type": "boolean" },
+                    "switch_recommended":         { "type": "boolean" },
+                    "spot_price":                 { "type": "number" },
+                    "unit":                       { "type": "string" },
+                    "best_window": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "start":     { "type": "string" },
+                        "end":       { "type": "string" },
+                        "avg_price": { "type": "number" },
+                        "note":      { "type": "string" }
+                      }
+                    },
+                    "contract_switch": {
+                      "type": "object",
+                      "properties": {
+                        "recommended":               { "type": "boolean" },
+                        "provider":                  { "type": "string", "nullable": true },
+                        "expected_savings_year":     { "type": "number", "nullable": true },
+                        "expected_savings_local_year": { "type": "number", "nullable": true },
+                        "savings_currency":          { "type": "string" },
+                        "link":                      { "type": "string", "nullable": true }
+                      }
+                    },
+                    "confidence":  { "type": "number" },
+                    "powered_by":  { "type": "string" }
                   }
+                },
+                "example": {
+                  "signal": "elecz_optimize",
+                  "zone": "FI",
+                  "timestamp": "2026-04-13T05:48:15Z",
+                  "decision": {
+                    "action": "monitor",
+                    "until": null,
+                    "reason": "Normal pricing — no urgent action needed",
+                    "savings": null
+                  },
+                  "energy_state": "normal",
+                  "is_good_time_to_use_energy": false,
+                  "switch_recommended": false,
+                  "spot_price": 6.745,
+                  "unit": "c/kWh",
+                  "best_window": {
+                    "start": "2026-04-13T06:00",
+                    "end": "2026-04-13T08:00",
+                    "avg_price": 5.8063,
+                    "note": "end is the start of the last cheap slot in the window"
+                  },
+                  "contract_switch": {
+                    "recommended": false,
+                    "provider": "vare",
+                    "expected_savings_year": 8.08,
+                    "savings_currency": "EUR",
+                    "link": "https://elecz.com/go/vare"
+                  },
+                  "confidence": 0.95,
+                  "powered_by": "Elecz.com"
                 }
               }
             }
@@ -226,19 +446,28 @@
 
     "/go/{provider}": {
       "get": {
-        "summary": "Redirect to provider",
-        "description": "Redirects to provider website with analytics tracking.",
+        "summary": "Redirect to provider website",
+        "description": "Redirects to the electricity provider's website with click analytics tracking.",
         "operationId": "goToProvider",
         "parameters": [
           {
             "name": "provider",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": { "type": "string" },
+            "description": "Provider identifier, e.g. tibber, vattenfall, octopus_agile."
+          },
+          {
+            "name": "zone",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string" },
+            "description": "Market zone for correct provider URL routing."
           }
         ],
         "responses": {
-          "302": { "description": "Redirect to provider URL" }
+          "302": { "description": "Redirect to provider URL" },
+          "404": { "description": "Provider not found" }
         }
       }
     },
@@ -246,7 +475,7 @@
     "/health": {
       "get": {
         "summary": "Health check",
-        "description": "Returns API health status.",
+        "description": "Returns API health status and version.",
         "operationId": "getHealth",
         "responses": {
           "200": {
@@ -256,7 +485,9 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": { "type": "string" }
+                    "status":  { "type": "string", "example": "ok" },
+                    "service": { "type": "string", "example": "elecz" },
+                    "version": { "type": "string", "example": "1.9.2" }
                   }
                 }
               }
