@@ -26,8 +26,18 @@
             "name": "zone",
             "in": "query",
             "required": true,
-            "schema": { "type": "string" },
-            "description": "Market zone. Nordic: FI, SE, SE1-SE4, NO, NO1-NO5, DK, DK1-DK2. Europe: DE, GB, GB-A..GB-P. Australia: AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS. New Zealand: NZ-NI, NZ-SI."
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FI", "SE", "SE1", "SE2", "SE3", "SE4",
+                "NO", "NO1", "NO2", "NO3", "NO4", "NO5",
+                "DK", "DK1", "DK2",
+                "DE", "GB",
+                "AU-NSW", "AU-VIC", "AU-QLD", "AU-SA", "AU-TAS",
+                "NZ-NI", "NZ-SI"
+              ]
+            },
+            "description": "Market zone. Nordic: FI, SE, SE1-SE4, NO, NO1-NO5, DK, DK1-DK2. Europe: DE, GB. Australia: AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS. New Zealand: NZ-NI, NZ-SI."
           }
         ],
         "responses": {
@@ -73,7 +83,17 @@
             "name": "zone",
             "in": "query",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FI", "SE", "SE1", "SE2", "SE3", "SE4",
+                "NO", "NO1", "NO2", "NO3", "NO4", "NO5",
+                "DK", "DK1", "DK2",
+                "DE", "GB",
+                "AU-NSW", "AU-VIC", "AU-QLD", "AU-SA", "AU-TAS",
+                "NZ-NI", "NZ-SI"
+              ]
+            },
             "description": "Market zone. AU and NZ zones return available: false."
           },
           {
@@ -171,7 +191,17 @@
             "name": "zone",
             "in": "query",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FI", "SE", "SE1", "SE2", "SE3", "SE4",
+                "NO", "NO1", "NO2", "NO3", "NO4", "NO5",
+                "DK", "DK1", "DK2",
+                "DE", "GB",
+                "AU-NSW", "AU-VIC", "AU-QLD", "AU-SA", "AU-TAS",
+                "NZ-NI", "NZ-SI"
+              ]
+            }
           },
           {
             "name": "consumption",
@@ -336,7 +366,17 @@
             "name": "zone",
             "in": "query",
             "required": true,
-            "schema": { "type": "string" }
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FI", "SE", "SE1", "SE2", "SE3", "SE4",
+                "NO", "NO1", "NO2", "NO3", "NO4", "NO5",
+                "DK", "DK1", "DK2",
+                "DE", "GB",
+                "AU-NSW", "AU-VIC", "AU-QLD", "AU-SA", "AU-TAS",
+                "NZ-NI", "NZ-SI"
+              ]
+            }
           },
           {
             "name": "consumption",
