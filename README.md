@@ -1,5 +1,7 @@
 # ⚡ Elecz — Real-Time Electricity Signals for AI Agents
 
+[![MCP Badge](https://lobehub.com/badge/mcp/zemloai-ctrl-elecz-api)](https://lobehub.com/mcp/zemloai-ctrl-elecz-api)
+
 Spot prices, cheapest hours, and contract recommendations for Europe and Oceania.  
 MCP-native. No authentication. No guessing.
 
