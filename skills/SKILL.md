@@ -58,7 +58,6 @@ Covers Finland, Sweden, Norway, Denmark, Germany, United Kingdom, Australia, and
 
 3. **Present clearly:**
    - Show price in local unit (c/kWh EUR, p/kWh GBP, öre/kWh SEK, øre/kWh NOK/DKK, AUD c/kWh, NZD c/kWh)
-   - Translate action: `run_now` = "Now is a good time", `delay` = "Wait until X"
    - Show savings in local currency
    - For DE: note Netzentgelt (regional grid fee ~10–15 ct/kWh) is not included — fixed by local grid operator
 
