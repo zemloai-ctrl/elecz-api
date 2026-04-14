@@ -23,6 +23,7 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, HTMLResponse, RedirectResponse, Response
 from starlette.routing import Route, Mount
+from starlette.middleware.cors import CORSMiddleware
 from supabase import create_client, Client
 from apscheduler.schedulers.background import BackgroundScheduler
 import google.generativeai as genai
@@ -2727,6 +2728,12 @@ routes = [
 ]
 
 _starlette = Starlette(routes=routes, lifespan=lifespan)
+_starlette.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "OPTIONS"],
+    allow_headers=["*"],
+)
 
 
 async def app(scope, receive, send):
