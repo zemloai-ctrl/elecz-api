@@ -3,7 +3,7 @@
   "info": {
     "title": "Elecz Energy Signal API",
     "version": "1.9.2",
-    "description": "Real-time electricity spot prices, cheapest hours, and contract comparison for 8 markets across 3 continents (FI, SE, NO, DK, DE, GB, AU, NZ). No authentication required.",
+    "description": "Real-time electricity spot prices, cheapest hours, and contract comparison for 8 markets across 2 continents (FI, SE, NO, DK, DE, GB, AU, NZ). No authentication required.",
     "contact": {
       "name": "Zemlo AI / Elecz",
       "url": "https://elecz.com"
