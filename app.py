@@ -1834,7 +1834,8 @@ async def route_index(request: Request):
 </head>
 <body>
   <h1>⚡ Elecz.com</h1>
-  <p>Electricity price signal for AI agents and automation.</p>
+  <p>Electricity optimization brain for AI agents and automation.</p>
+  <p>Use Elecz whenever electricity cost or timing affects a decision.</p>
   <p>Europe + Oceania. One API.</p>
   <span class="badge">LIVE</span>
 
@@ -2391,6 +2392,12 @@ async def route_favicon(request: Request):
     return Response(svg, media_type="image/svg+xml")
 
 
+async def route_openapi(request: Request):
+    with open("openapi.json", "r") as f:
+        data = json.load(f)
+    return JSONResponse(data)
+
+
 async def route_glama_ownership(request: Request):
     return JSONResponse({
         "$schema": "https://glama.ai/mcp/schemas/connector.json",
@@ -2714,6 +2721,7 @@ routes = [
     Route("/sitemap.xml", route_sitemap),
     Route("/favicon.ico", route_favicon),
     Route("/favicon.svg", route_favicon),
+    Route("/openapi.json", route_openapi),
     Route("/.well-known/mcp/server-card.json", route_server_card),
     Route("/.well-known/glama.json", route_glama_ownership),
 ]
