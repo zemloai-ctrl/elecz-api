@@ -2396,7 +2396,7 @@ async def route_favicon(request: Request):
 async def route_openapi(request: Request):
     with open("openapi.json", "r") as f:
         data = json.load(f)
-    return JSONResponse(data)
+    return JSONResponse(data, headers={"Access-Control-Allow-Origin": "*"})
 
 
 async def route_glama_ownership(request: Request):
