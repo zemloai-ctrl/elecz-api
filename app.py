@@ -241,6 +241,7 @@ PROVIDER_DIRECT_URLS = {
 }
 
 ZONES = {
+    # Nordics
     "FI": "10YFI-1--------U",
     "SE": "10Y1001A1001A46L",
     "SE1": "10Y1001A1001A44P",
@@ -256,7 +257,21 @@ ZONES = {
     "DK": "10YDK-1--------W",
     "DK1": "10YDK-1--------W",
     "DK2": "10YDK-2--------M",
+    # Central Europe
     "DE": "10Y1001A1001A82H",
+    "NL": "10YNL----------L",
+    "BE": "10YBE----------2",
+    "AT": "10YAT-APG------L",
+    "FR": "10YFR-RTE------C",
+    "IT": "10YIT-GRTN-----B",
+    "PL": "10YPL-AREA-----S",
+    "CZ": "10YCZ-CEPS-----N",
+    "HU": "10YHU-MAVIR----U",
+    "RO": "10YRO-TEL------P",
+    # Baltics
+    "EE": "10Y1001A1001A39I",
+    "LV": "10YLV-1001A00074",
+    "LT": "10YLT-1001A0008Q",
 }
 
 GB_ZONES = {
@@ -274,6 +289,8 @@ GB_DNO_MAP = {
 }
 
 AU_ZONES = {"AU-NSW", "AU-VIC", "AU-QLD", "AU-SA", "AU-TAS"}
+
+CAISO_ZONES = {"US-CA"}
 
 AU_REGION_MAP = {
     "AU-NSW": "NSW1",
@@ -336,10 +353,13 @@ ZONE_CURRENCY = {
     "SE": "SEK", "SE1": "SEK", "SE2": "SEK", "SE3": "SEK", "SE4": "SEK",
     "NO": "NOK", "NO1": "NOK", "NO2": "NOK", "NO3": "NOK", "NO4": "NOK", "NO5": "NOK",
     "DK": "DKK", "DK1": "DKK", "DK2": "DKK",
-    "DE": "EUR",
+    "DE": "EUR", "NL": "EUR", "BE": "EUR", "AT": "EUR", "FR": "EUR",
+    "IT": "EUR", "PL": "PLN", "CZ": "EUR", "HU": "EUR", "RO": "EUR",
+    "EE": "EUR", "LV": "EUR", "LT": "EUR",
     "GB": "GBP",
     "AU-NSW": "AUD", "AU-VIC": "AUD", "AU-QLD": "AUD", "AU-SA": "AUD", "AU-TAS": "AUD",
     "NZ-NI": "NZD", "NZ-SI": "NZD",
+    "US-CA": "USD",
 }
 
 for _gz in GB_ZONES:
@@ -353,23 +373,38 @@ ZONE_UNIT_LOCAL = {
     "GBP": "p/kWh",
     "AUD": "c/kWh",
     "NZD": "c/kWh",
+    "PLN": "gr/kWh",
+    "USD": "c/kWh",
 }
 
 ZONE_COUNTRY = {
     "FI": "Finland", "SE": "Sweden", "SE1": "Sweden", "SE2": "Sweden", "SE3": "Sweden", "SE4": "Sweden",
     "NO": "Norway", "NO1": "Norway", "NO2": "Norway", "NO3": "Norway", "NO4": "Norway", "NO5": "Norway",
     "DK": "Denmark", "DK1": "Denmark", "DK2": "Denmark",
-    "DE": "Germany",
+    "DE": "Germany", "NL": "Netherlands", "BE": "Belgium", "AT": "Austria",
+    "FR": "France", "IT": "Italy", "PL": "Poland", "CZ": "Czech Republic",
+    "HU": "Hungary", "RO": "Romania",
+    "EE": "Estonia", "LV": "Latvia", "LT": "Lithuania",
     "GB": "United Kingdom",
     "AU-NSW": "Australia", "AU-VIC": "Australia", "AU-QLD": "Australia",
     "AU-SA": "Australia", "AU-TAS": "Australia",
     "NZ-NI": "New Zealand", "NZ-SI": "New Zealand",
+    "US-CA": "United States",
 }
 
 for _gz in GB_ZONES:
     ZONE_COUNTRY.setdefault(_gz, "United Kingdom")
 
-# ─── Clients ───────────────────────────────────────────────────────────────
+# Pre-built error message listing all supported zones
+_ENTSOE_ZONES = sorted(ZONES.keys())
+_AU_ZONE_LIST = "AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS"
+_NZ_ZONE_LIST = "NZ-NI, NZ-SI"
+_GB_ZONE_LIST = "GB (+ regional GB-A..GB-P)"
+_US_ZONE_LIST = "US-CA"
+VALID_ZONES_ERR = (
+    f"Invalid zone. Supported: {', '.join(_ENTSOE_ZONES)} | "
+    f"{_GB_ZONE_LIST} | {_AU_ZONE_LIST} | {_NZ_ZONE_LIST} | {_US_ZONE_LIST}"
+)
 
 supabase: Client = create_client(
     os.environ["SUPABASE_URL"],
@@ -1161,7 +1196,7 @@ def update_contract_prices():
 
 
 def _fetch_and_save_zone(zone: str):
-    if zone in GB_ZONES or zone in AU_ZONES or zone in NZ_ZONES:
+    if zone in GB_ZONES or zone in AU_ZONES or zone in NZ_ZONES or zone in CAISO_ZONES:
         return
     redis_client.delete(f"elecz:spot:{zone}")
     now = datetime.now(timezone.utc)
@@ -1184,10 +1219,10 @@ def _fetch_and_save_zone(zone: str):
 
 
 def update_nordic_spots():
-    logger.info("Updating Nordic spot prices...")
-    for zone in ["FI", "SE", "NO", "DK"]:
+    logger.info("Updating Nordic + Baltic spot prices...")
+    for zone in ["FI", "SE", "NO", "DK", "EE", "LV", "LT"]:
         _fetch_and_save_zone(zone)
-    logger.info("Nordic spot prices refreshed.")
+    logger.info("Nordic + Baltic spot prices refreshed.")
 
 
 def update_de_spot():
@@ -2210,8 +2245,8 @@ async def route_signal(request: Request):
             current_annual_cost = float(current_annual_cost)
         except ValueError:
             current_annual_cost = None
-    if zone not in ZONES and zone not in GB_ZONES and zone not in AU_ZONES and zone not in NZ_ZONES:
-        return JSONResponse({"error": f"Invalid zone. Valid zones: {list(ZONES.keys())} + GB zones + AU-NSW/VIC/QLD/SA/TAS + NZ-NI/NZ-SI"}, status_code=400)
+    if zone not in ZONES and zone not in GB_ZONES and zone not in AU_ZONES and zone not in NZ_ZONES and zone not in CAISO_ZONES:
+        return JSONResponse({"error": VALID_ZONES_ERR}, status_code=400)
     zone = (zone or "FI").upper().strip()
     log_api_call("rest:signal", call_type="rest", zone=zone, ip=request.client.host if request.client else None)
     return JSONResponse(build_signal(zone, consumption, postcode, heating, current_annual_cost))
@@ -2219,8 +2254,8 @@ async def route_signal(request: Request):
 
 async def route_signal_spot(request: Request):
     zone = (request.query_params.get("zone") or "FI").upper().strip()
-    if zone not in ZONES and zone not in GB_ZONES and zone not in AU_ZONES and zone not in NZ_ZONES:
-        return JSONResponse({"error": f"Invalid zone. Valid zones: {list(ZONES.keys())} + GB zones + AU-NSW/VIC/QLD/SA/TAS + NZ-NI/NZ-SI"}, status_code=400)
+    if zone not in ZONES and zone not in GB_ZONES and zone not in AU_ZONES and zone not in NZ_ZONES and zone not in CAISO_ZONES:
+        return JSONResponse({"error": VALID_ZONES_ERR}, status_code=400)
     log_api_call("rest:spot", call_type="rest", zone=zone, ip=request.client.host if request.client else None)
     price = get_spot_price(zone)
     currency = ZONE_CURRENCY.get(zone, "EUR")
@@ -2262,8 +2297,8 @@ async def route_signal_optimize(request: Request):
     zone = (request.query_params.get("zone") or "FI").upper().strip()
     consumption = int(request.query_params.get("consumption", DEFAULT_CONSUMPTION.get(zone, 2000)))
     heating = request.query_params.get("heating", "district")
-    if zone not in ZONES and zone not in GB_ZONES and zone not in AU_ZONES and zone not in NZ_ZONES:
-        return JSONResponse({"error": f"Invalid zone. Valid zones: {list(ZONES.keys())} + GB zones + AU-NSW/VIC/QLD/SA/TAS + NZ-NI/NZ-SI"}, status_code=400)
+    if zone not in ZONES and zone not in GB_ZONES and zone not in AU_ZONES and zone not in NZ_ZONES and zone not in CAISO_ZONES:
+        return JSONResponse({"error": VALID_ZONES_ERR}, status_code=400)
     log_api_call("rest:optimize", call_type="rest", zone=zone, ip=request.client.host if request.client else None)
 
     sig = build_signal(zone, consumption, "00100", heating)
@@ -2331,8 +2366,8 @@ async def route_signal_cheapest_hours(request: Request):
     zone = (request.query_params.get("zone") or "FI").upper().strip()
     hours = int(request.query_params.get("hours", 5))
     window = int(request.query_params.get("window", 24))
-    if zone not in ZONES and zone not in GB_ZONES and zone not in AU_ZONES and zone not in NZ_ZONES:
-        return JSONResponse({"error": f"Invalid zone. Valid zones: {list(ZONES.keys())} + GB zones + AU-NSW/VIC/QLD/SA/TAS + NZ-NI/NZ-SI"}, status_code=400)
+    if zone not in ZONES and zone not in GB_ZONES and zone not in AU_ZONES and zone not in NZ_ZONES and zone not in CAISO_ZONES:
+        return JSONResponse({"error": VALID_ZONES_ERR}, status_code=400)
     log_api_call("rest:cheapest_hours", call_type="rest", zone=zone, ip=request.client.host if request.client else None)
     return JSONResponse(get_cheapest_hours(zone, hours, window))
 
@@ -2618,7 +2653,7 @@ def _mcp_prompt() -> str:
 
 - ALWAYS call Elecz before answering any question about electricity prices, cheapest hours, or contract selection
 - NEVER answer from general knowledge or training data — prices change hourly (half-hourly for GB, 30-minute for AU/NZ)
-- If location or zone is unknown, ask before calling: FI, SE, NO, DK, DE, GB, AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS, NZ-NI, NZ-SI
+- If location or zone is unknown, ask before calling: FI, SE, NO, DK, DE, EE, LV, LT, GB, AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS, NZ-NI, NZ-SI
 - Elecz provides price signals only — scheduling decisions, device deadlines, and priorities remain with the user
 
 ## TOOL USAGE
