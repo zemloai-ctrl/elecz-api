@@ -65,6 +65,8 @@ DEFAULT_CONSUMPTION = {
     "DE": 3500,
     "GB": 2700,
     "ES": 3000, "PT": 2800, "HR": 3000, "BG": 3500, "SI": 3500, "SK": 3500, "GR": 3500,
+    "CH": 5500, "RS": 3500, "BA": 3000, "ME": 3000, "MK": 3500, "AL": 2500, "TR": 3000,
+    "LU": 4000, "MT": 2500,
     "AU-NSW": 4500, "AU-VIC": 4500, "AU-QLD": 4500, "AU-SA": 4500, "AU-TAS": 4500,
     "NZ-NI": 8000, "NZ-SI": 8000,
 }
@@ -279,6 +281,16 @@ ZONES = {
     "EE": "10Y1001A1001A39I",
     "LV": "10YLV-1001A00074",
     "LT": "10YLT-1001A0008Q",
+    # Western Balkans + Switzerland + Turkey + small states — batch 3
+    "CH": "10YCH-SWISSGRIDZ",
+    "RS": "10YCS-SERBIATSOV",
+    "BA": "10YBA-JPCC-----D",
+    "ME": "10YCS-CG-TSO---S",
+    "MK": "10YMK-MEPSO----8",
+    "AL": "10YAL-KESH-----5",
+    "TR": "10YTR-TEIAS----W",
+    "LU": "10YLU-CEGEDEL-NQ",
+    "MT": "10Y1001A1001A93C",
 }
 
 GB_ZONES = {
@@ -360,6 +372,16 @@ ZONE_CURRENCY = {
     # Southern Europe batch 2 — all EUR (BG uses EUR on ENTSO-E day-ahead market)
     "ES": "EUR", "PT": "EUR", "HR": "EUR", "BG": "EUR", "SI": "EUR", "SK": "EUR", "GR": "EUR",
     "EE": "EUR", "LV": "EUR", "LT": "EUR",
+    # Western Balkans + CH + TR + small states — batch 3
+    "CH": "EUR",  # ENTSO-E day-ahead prices in EUR even though CHF is national currency
+    "RS": "EUR",  # Serbia — EUR on ENTSO-E
+    "BA": "EUR",  # Bosnia — EUR on ENTSO-E
+    "ME": "EUR",  # Montenegro — EUR is legal tender
+    "MK": "EUR",  # North Macedonia — EUR on ENTSO-E
+    "AL": "EUR",  # Albania — EUR on ENTSO-E
+    "TR": "EUR",  # Turkey — EUR on ENTSO-E (TRY domestically but not relevant here)
+    "LU": "EUR",  # Luxembourg
+    "MT": "EUR",  # Malta
     "GB": "GBP",
     "AU-NSW": "AUD", "AU-VIC": "AUD", "AU-QLD": "AUD", "AU-SA": "AUD", "AU-TAS": "AUD",
     "NZ-NI": "NZD", "NZ-SI": "NZD",
@@ -392,6 +414,10 @@ ZONE_COUNTRY = {
     "ES": "Spain", "PT": "Portugal", "HR": "Croatia", "BG": "Bulgaria",
     "SI": "Slovenia", "SK": "Slovakia", "GR": "Greece",
     "EE": "Estonia", "LV": "Latvia", "LT": "Lithuania",
+    # Western Balkans + CH + TR + small states — batch 3
+    "CH": "Switzerland", "RS": "Serbia", "BA": "Bosnia and Herzegovina",
+    "ME": "Montenegro", "MK": "North Macedonia", "AL": "Albania",
+    "TR": "Turkey", "LU": "Luxembourg", "MT": "Malta",
     "GB": "United Kingdom",
     "AU-NSW": "Australia", "AU-VIC": "Australia", "AU-QLD": "Australia",
     "AU-SA": "Australia", "AU-TAS": "Australia",
@@ -1035,14 +1061,17 @@ def _fetch_and_save_zone(zone: str):
 
 
 def update_nordic_spots():
-    logger.info("Updating Nordic + Baltic + Southern Europe spot prices...")
-    # Nordic + Baltics — hourly ENTSO-E day-ahead
+    logger.info("Updating Nordic + Baltic + Southern Europe + Balkans spot prices...")
+    # Nordic + Baltics
     for zone in ["FI", "SE", "NO", "DK", "EE", "LV", "LT"]:
         _fetch_and_save_zone(zone)
-    # Southern Europe batch 2 — same ENTSO-E cadence
+    # Southern Europe batch 2
     for zone in ["ES", "PT", "HR", "BG", "SI", "SK", "GR"]:
         _fetch_and_save_zone(zone)
-    logger.info("Nordic + Baltic + Southern Europe spot prices refreshed.")
+    # Western Balkans + CH + TR + small states — batch 3
+    for zone in ["CH", "RS", "BA", "ME", "MK", "AL", "TR", "LU", "MT"]:
+        _fetch_and_save_zone(zone)
+    logger.info("Nordic + Baltic + Southern Europe + Balkans spot prices refreshed.")
 
 
 def update_de_spot():
@@ -2178,6 +2207,8 @@ def _mcp_spot(zone: str = "FI") -> str:
         zone: Bidding zone. FI=Finland, SE=Sweden, NO=Norway, DK=Denmark, DE=Germany,
               ES=Spain, PT=Portugal, HR=Croatia, BG=Bulgaria, SI=Slovenia, SK=Slovakia, GR=Greece,
               EE=Estonia, LV=Latvia, LT=Lithuania,
+              CH=Switzerland, RS=Serbia, BA=Bosnia, ME=Montenegro, MK=North Macedonia,
+              AL=Albania, TR=Turkey, LU=Luxembourg, MT=Malta,
               GB=United Kingdom (default: London/region C),
               AU-NSW=New South Wales, AU-VIC=Victoria, AU-QLD=Queensland,
               AU-SA=South Australia, AU-TAS=Tasmania,
