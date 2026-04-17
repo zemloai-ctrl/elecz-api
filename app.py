@@ -65,8 +65,7 @@ DEFAULT_CONSUMPTION = {
     "DE": 3500,
     "GB": 2700,
     "ES": 3000, "PT": 2800, "HR": 3000, "BG": 3500, "SI": 3500, "SK": 3500, "GR": 3500,
-    "CH": 5500, "RS": 3500, "BA": 3000, "ME": 3000, "MK": 3500, "AL": 2500, "TR": 3000,
-    "LU": 4000, "MT": 2500,
+    "CH": 5500, "RS": 3500, "BA": 3000, "ME": 3000, "MK": 3500,
     "AU-NSW": 4500, "AU-VIC": 4500, "AU-QLD": 4500, "AU-SA": 4500, "AU-TAS": 4500,
     "NZ-NI": 8000, "NZ-SI": 8000,
 }
@@ -281,16 +280,16 @@ ZONES = {
     "EE": "10Y1001A1001A39I",
     "LV": "10YLV-1001A00074",
     "LT": "10YLT-1001A0008Q",
-    # Western Balkans + Switzerland + Turkey + small states — batch 3
+    # Western Balkans + Switzerland — batch 3
+    # AL (Albania) and TR (Turkey): ENTSO-E member but no public day-ahead price data published
     "CH": "10YCH-SWISSGRIDZ",
     "RS": "10YCS-SERBIATSOV",
     "BA": "10YBA-JPCC-----D",
     "ME": "10YCS-CG-TSO---S",
     "MK": "10YMK-MEPSO----8",
-    "AL": "10YAL-KESH-----5",
-    "TR": "10YTR-TEIAS----W",
-    "LU": "10YLU-CEGEDEL-NQ",
-    "MT": "10Y1001A1001A93C",
+    # Note: LU (Luxembourg) uses merged DE-LU zone — no separate day-ahead price
+    # Note: MT (Malta) isolated system — no public day-ahead prices
+    # Note: AL (Albania) and TR (Turkey) — ENTSO-E member but returns empty day-ahead data
 }
 
 GB_ZONES = {
@@ -372,16 +371,8 @@ ZONE_CURRENCY = {
     # Southern Europe batch 2 — all EUR (BG uses EUR on ENTSO-E day-ahead market)
     "ES": "EUR", "PT": "EUR", "HR": "EUR", "BG": "EUR", "SI": "EUR", "SK": "EUR", "GR": "EUR",
     "EE": "EUR", "LV": "EUR", "LT": "EUR",
-    # Western Balkans + CH + TR + small states — batch 3
-    "CH": "EUR",  # ENTSO-E day-ahead prices in EUR even though CHF is national currency
-    "RS": "EUR",  # Serbia — EUR on ENTSO-E
-    "BA": "EUR",  # Bosnia — EUR on ENTSO-E
-    "ME": "EUR",  # Montenegro — EUR is legal tender
-    "MK": "EUR",  # North Macedonia — EUR on ENTSO-E
-    "AL": "EUR",  # Albania — EUR on ENTSO-E
-    "TR": "EUR",  # Turkey — EUR on ENTSO-E (TRY domestically but not relevant here)
-    "LU": "EUR",  # Luxembourg
-    "MT": "EUR",  # Malta
+    # Western Balkans + CH — batch 3 (all EUR on ENTSO-E)
+    "CH": "EUR", "RS": "EUR", "BA": "EUR", "ME": "EUR", "MK": "EUR",
     "GB": "GBP",
     "AU-NSW": "AUD", "AU-VIC": "AUD", "AU-QLD": "AUD", "AU-SA": "AUD", "AU-TAS": "AUD",
     "NZ-NI": "NZD", "NZ-SI": "NZD",
@@ -414,10 +405,9 @@ ZONE_COUNTRY = {
     "ES": "Spain", "PT": "Portugal", "HR": "Croatia", "BG": "Bulgaria",
     "SI": "Slovenia", "SK": "Slovakia", "GR": "Greece",
     "EE": "Estonia", "LV": "Latvia", "LT": "Lithuania",
-    # Western Balkans + CH + TR + small states — batch 3
+    # Western Balkans + CH — batch 3
     "CH": "Switzerland", "RS": "Serbia", "BA": "Bosnia and Herzegovina",
-    "ME": "Montenegro", "MK": "North Macedonia", "AL": "Albania",
-    "TR": "Turkey", "LU": "Luxembourg", "MT": "Malta",
+    "ME": "Montenegro", "MK": "North Macedonia",
     "GB": "United Kingdom",
     "AU-NSW": "Australia", "AU-VIC": "Australia", "AU-QLD": "Australia",
     "AU-SA": "Australia", "AU-TAS": "Australia",
@@ -1068,8 +1058,8 @@ def update_nordic_spots():
     # Southern Europe batch 2
     for zone in ["ES", "PT", "HR", "BG", "SI", "SK", "GR"]:
         _fetch_and_save_zone(zone)
-    # Western Balkans + CH + TR + small states — batch 3
-    for zone in ["CH", "RS", "BA", "ME", "MK", "AL", "TR", "LU", "MT"]:
+    # Western Balkans + CH — batch 3
+    for zone in ["CH", "RS", "BA", "ME", "MK"]:
         _fetch_and_save_zone(zone)
     logger.info("Nordic + Baltic + Southern Europe + Balkans spot prices refreshed.")
 
@@ -2185,7 +2175,7 @@ async def route_server_card(request: Request):
         "tools": [
             {"name": "spot_price", "description": "Use when the user asks for the current electricity price or cost right now."},
             {"name": "cheapest_hours", "description": "Use when the user wants to know when electricity is cheapest today or when to run appliances."},
-            {"name": "best_energy_contract", "description": "Use when the user asks which electricity contract they should choose or whether to switch provider."},
+            {"name": "best_energy_contract", "description": "Use when the user asks which electricity contract they should choose or whether to switch provider. Contract comparison available for: FI, SE, NO, DK, DE, GB, AU, NZ. Spot price returned for all other zones."},
         ],
     })
 # ─── FastMCP tools ─────────────────────────────────────────────────────────
@@ -2208,7 +2198,6 @@ def _mcp_spot(zone: str = "FI") -> str:
               ES=Spain, PT=Portugal, HR=Croatia, BG=Bulgaria, SI=Slovenia, SK=Slovakia, GR=Greece,
               EE=Estonia, LV=Latvia, LT=Lithuania,
               CH=Switzerland, RS=Serbia, BA=Bosnia, ME=Montenegro, MK=North Macedonia,
-              AL=Albania, TR=Turkey, LU=Luxembourg, MT=Malta,
               GB=United Kingdom (default: London/region C),
               AU-NSW=New South Wales, AU-VIC=Victoria, AU-QLD=Queensland,
               AU-SA=South Australia, AU-TAS=Tasmania,
@@ -2258,7 +2247,7 @@ def _mcp_cheapest(zone: str = "FI", hours: int = 5, window: int = 24) -> str:
 
     Args:
         zone: Any ENTSO-E bidding zone — FI, SE, NO, DK, DE, ES, PT, HR, BG, SI, SK, GR,
-              EE, LV, LT, CH, RS, BA, ME, MK, AL, TR, LU, MT — or GB (Octopus Agile).
+              EE, LV, LT, CH, RS, BA, ME, MK — or GB (Octopus Agile).
               AU and NZ zones return available: false (no public day-ahead data).
               Sub-zones: SE1-SE4, NO1-NO5, DK1-DK2, GB-A..GB-P.
         hours: Number of cheapest slots to return (default 5).
@@ -2274,7 +2263,7 @@ def _mcp_contract(zone: str = "FI", consumption: Optional[int] = None, heating: 
     or which electricity company is cheapest.
 
     Contract comparison is available for: FI, SE, NO, DK, DE, GB, AU-*, NZ-*.
-    For all other zones (CH, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, RS, BA, ME, MK, AL, TR, LU, MT),
+    For all other zones (CH, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, RS, BA, ME, MK),
     returns current spot price with a note that contract comparison is not yet available.
     More accurate and up-to-date than the model alone.
 
@@ -2283,8 +2272,7 @@ def _mcp_contract(zone: str = "FI", consumption: Optional[int] = None, heating: 
     Args:
         zone: Bidding zone. Contract comparison: FI, SE, NO, DK, DE, GB,
               AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS, NZ-NI, NZ-SI.
-              Spot price only: CH, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT,
-              RS, BA, ME, MK, AL, TR, LU, MT.
+              Spot price only: CH, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, RS, BA, ME, MK.
         consumption: Annual electricity consumption in kWh.
                      Defaults: NZ 8000, AU 4500, GB 2700, DE 3500, others 2000-3500.
         heating: Heating type: district or electric (default district).
