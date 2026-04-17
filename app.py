@@ -64,10 +64,10 @@ DEFAULT_CONSUMPTION = {
     "DK": 2000, "DK1": 2000, "DK2": 2000,
     "DE": 3500,
     "GB": 2700,
+    "ES": 3000, "PT": 2800, "HR": 3000, "BG": 3500, "SI": 3500, "SK": 3500, "GR": 3500,
     "AU-NSW": 4500, "AU-VIC": 4500, "AU-QLD": 4500, "AU-SA": 4500, "AU-TAS": 4500,
     "NZ-NI": 8000, "NZ-SI": 8000,
 }
-
 PROVIDER_URLS = {
     "FI": {
         "tibber": "https://tibber.com/fi/sahkosopimus",
@@ -239,7 +239,6 @@ PROVIDER_DIRECT_URLS = {
         "contact_energy_ev": "https://contact.co.nz/products/electricity/electric-vehicles",
     },
 }
-
 ZONES = {
     # Nordics
     "FI": "10YFI-1--------U",
@@ -268,6 +267,14 @@ ZONES = {
     "CZ": "10YCZ-CEPS-----N",
     "HU": "10YHU-MAVIR----U",
     "RO": "10YRO-TEL------P",
+    # Southern Europe — batch 2
+    "ES": "10YES-REE------0",
+    "PT": "10YPT-REN------W",
+    "HR": "10YHR-HEP------M",
+    "BG": "10YBG-ESO------P",
+    "SI": "10YSI-ELES-----O",
+    "SK": "10YSK-SEPS-----K",
+    "GR": "10YGR-HTSO-----Y",
     # Baltics
     "EE": "10Y1001A1001A39I",
     "LV": "10YLV-1001A00074",
@@ -289,7 +296,6 @@ GB_DNO_MAP = {
 }
 
 AU_ZONES = {"AU-NSW", "AU-VIC", "AU-QLD", "AU-SA", "AU-TAS"}
-
 CAISO_ZONES = {"US-CA"}
 
 AU_REGION_MAP = {
@@ -301,11 +307,7 @@ AU_REGION_MAP = {
 }
 
 NZ_ZONES = {"NZ-NI", "NZ-SI"}
-
-NZ_REGION_MAP = {
-    "NZ-NI": "NI",  # North Island
-    "NZ-SI": "SI",  # South Island
-}
+NZ_REGION_MAP = {"NZ-NI": "NI", "NZ-SI": "SI"}
 
 # Static NZ retailer feature flags — updated manually as market changes
 # Flick Electric acquired by Meridian Energy July 2025 — no spot pass-through retailers remain
@@ -355,6 +357,8 @@ ZONE_CURRENCY = {
     "DK": "DKK", "DK1": "DKK", "DK2": "DKK",
     "DE": "EUR", "NL": "EUR", "BE": "EUR", "AT": "EUR", "FR": "EUR",
     "IT": "EUR", "PL": "PLN", "CZ": "EUR", "HU": "EUR", "RO": "EUR",
+    # Southern Europe batch 2 — all EUR (BG uses EUR on ENTSO-E day-ahead market)
+    "ES": "EUR", "PT": "EUR", "HR": "EUR", "BG": "EUR", "SI": "EUR", "SK": "EUR", "GR": "EUR",
     "EE": "EUR", "LV": "EUR", "LT": "EUR",
     "GB": "GBP",
     "AU-NSW": "AUD", "AU-VIC": "AUD", "AU-QLD": "AUD", "AU-SA": "AUD", "AU-TAS": "AUD",
@@ -384,6 +388,9 @@ ZONE_COUNTRY = {
     "DE": "Germany", "NL": "Netherlands", "BE": "Belgium", "AT": "Austria",
     "FR": "France", "IT": "Italy", "PL": "Poland", "CZ": "Czech Republic",
     "HU": "Hungary", "RO": "Romania",
+    # Southern Europe batch 2
+    "ES": "Spain", "PT": "Portugal", "HR": "Croatia", "BG": "Bulgaria",
+    "SI": "Slovenia", "SK": "Slovakia", "GR": "Greece",
     "EE": "Estonia", "LV": "Latvia", "LT": "Lithuania",
     "GB": "United Kingdom",
     "AU-NSW": "Australia", "AU-VIC": "Australia", "AU-QLD": "Australia",
@@ -395,7 +402,6 @@ ZONE_COUNTRY = {
 for _gz in GB_ZONES:
     ZONE_COUNTRY.setdefault(_gz, "United Kingdom")
 
-# Pre-built error message listing all supported zones
 _ENTSOE_ZONES = sorted(ZONES.keys())
 _AU_ZONE_LIST = "AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS"
 _NZ_ZONE_LIST = "NZ-NI, NZ-SI"
@@ -411,11 +417,21 @@ supabase: Client = create_client(
     os.environ["SUPABASE_SERVICE_KEY"]
 )
 
-redis_client = redis.from_url(os.environ["UPSTASH_REDIS_URL"])
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-gemini_model = genai.GenerativeModel("gemini-2.5-flash")
-ENTSOE_TOKEN = os.environ["ENTSOE_SECURITY_TOKEN"]
+# Redis with explicit timeouts to prevent hanging connections on Render restarts
+redis_client = redis.from_url(
+    os.environ["UPSTASH_REDIS_URL"],
+    socket_timeout=5,
+    socket_connect_timeout=5,
+    retry_on_timeout=True,
+)
 
+genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+# response_mime_type ensures Gemini returns clean JSON without markdown fences
+gemini_model = genai.GenerativeModel(
+    "gemini-2.5-flash",
+    generation_config={"response_mime_type": "application/json"},
+)
+ENTSOE_TOKEN = os.environ["ENTSOE_SECURITY_TOKEN"]
 # ─── Analytics ─────────────────────────────────────────────────────────────
 
 def log_api_call(tool_name: str, call_type: str = "rest", zone: str = None, ip: str = None):
@@ -426,9 +442,7 @@ def log_api_call(tool_name: str, call_type: str = "rest", zone: str = None, ip: 
             ip_prefix = ".".join(parts[:3])
         elif ":" in ip:
             ip_prefix = ip[:18]
-
     country_hint = ZONE_COUNTRY.get(zone.upper(), None) if zone else None
-
     try:
         supabase.table("api_calls").insert({
             "call_type": call_type,
@@ -475,7 +489,6 @@ def fetch_day_ahead(zone: str, date: datetime, _retry: int = 3) -> list[dict]:
     }
     timeout = 60 if zone == "DE" else 15
     base_backoff = 15 if zone == "DE" else 5
-
     for attempt in range(1, _retry + 1):
         try:
             resp = httpx.get(ENTSOE_API_URL, params=params, timeout=timeout)
@@ -511,11 +524,9 @@ def fetch_octopus_agile(zone: str = "GB") -> list[dict]:
     product = "AGILE-24-10-01"
     tariff = f"E-1R-{product}-{dno}"
     url = f"https://api.octopus.energy/v1/products/{product}/electricity-tariffs/{tariff}/standard-unit-rates/"
-
     now = datetime.now(timezone.utc)
     period_from = now.replace(hour=0, minute=0, second=0, microsecond=0)
     period_to = period_from + timedelta(hours=47, minutes=30)
-
     try:
         resp = httpx.get(url, params={
             "period_from": period_from.isoformat().replace("+00:00", "Z"),
@@ -526,21 +537,15 @@ def fetch_octopus_agile(zone: str = "GB") -> list[dict]:
     except Exception as e:
         logger.error(f"Octopus Agile fetch failed zone={zone}: {e}")
         return []
-
     rows = []
     for item in data.get("results", []):
         try:
             price_inc_vat = float(item["value_inc_vat"])
             valid_from = datetime.fromisoformat(item["valid_from"].replace("Z", "+00:00"))
             is_abnormal = price_inc_vat > 100.0 or price_inc_vat < -10.0
-            rows.append({
-                "hour": valid_from,
-                "price_ckwh": round(price_inc_vat, 4),
-                "is_abnormal": is_abnormal,
-            })
+            rows.append({"hour": valid_from, "price_ckwh": round(price_inc_vat, 4), "is_abnormal": is_abnormal})
         except Exception as e:
             logger.warning(f"Octopus row parse error: {e}")
-
     logger.info(f"Octopus Agile zone={zone}: {len(rows)} half-hourly slots fetched")
     return rows
 
@@ -557,15 +562,12 @@ def fetch_aemo() -> list[dict]:
     except Exception as e:
         logger.error(f"AEMO fetch failed: {e}")
         return []
-
     summary = data.get("ELEC_NEM_SUMMARY", [])
     if not summary:
         logger.warning("AEMO returned empty ELEC_NEM_SUMMARY")
         return []
-
     aemo_to_zone = {v: k for k, v in AU_REGION_MAP.items()}
     now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
-
     rows = []
     for item in summary:
         region = item.get("REGIONID", "")
@@ -576,15 +578,9 @@ def fetch_aemo() -> list[dict]:
             price_aud_mwh = float(item["PRICE"])
             price_ckwh = round(price_aud_mwh / 10, 4)
             is_abnormal = price_aud_mwh > 3000.0 or price_aud_mwh < -100.0
-            rows.append({
-                "zone": zone,
-                "hour": now,
-                "price_ckwh": price_ckwh,
-                "is_abnormal": is_abnormal,
-            })
+            rows.append({"zone": zone, "hour": now, "price_ckwh": price_ckwh, "is_abnormal": is_abnormal})
         except (KeyError, ValueError, TypeError) as e:
             logger.warning(f"AEMO row parse error region={region}: {e}")
-
     logger.info(f"AEMO fetched {len(rows)} zone prices")
     return rows
 
@@ -593,11 +589,9 @@ def fetch_aemo() -> list[dict]:
 def fetch_nz_spot() -> list[dict]:
     """Fetch current NZ spot prices from EM6 free 24hrs API.
     Uses industry-standard reference nodes: HAY2201 (NI), BEN2201 (SI).
-    Returns list of {zone, hour, price_ckwh, is_abnormal}.
     Prices are in NZD/MWh — divide by 10 to get NZD c/kWh.
     No authentication required.
     Endpoint: https://api.em6.co.nz/ords/em6/data_api/price/free_24hrs/
-    Fields: node_id, price, timestamp
     """
     try:
         resp = httpx.get(EM6_FREE_API_URL, timeout=15)
@@ -606,12 +600,10 @@ def fetch_nz_spot() -> list[dict]:
     except Exception as e:
         logger.error(f"EM6 free fetch failed: {e}")
         return []
-
     items = data.get("items", [])
     if not items:
         logger.warning("EM6 free returned empty items")
         return []
-
     # Find latest trading period for each reference node
     node_latest = {}
     for item in items:
@@ -621,7 +613,6 @@ def fetch_nz_spot() -> list[dict]:
         ts = item.get("timestamp", "")
         if node not in node_latest or ts > node_latest[node]["timestamp"]:
             node_latest[node] = item
-
     now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
     rows = []
     for nz_zone, node_id in NZ_REFERENCE_NODES.items():
@@ -633,19 +624,12 @@ def fetch_nz_spot() -> list[dict]:
             price_nzd_mwh = float(item["price"])
             price_ckwh = round(price_nzd_mwh / 10, 4)
             is_abnormal = price_nzd_mwh > 5000.0 or price_nzd_mwh < -200.0
-            rows.append({
-                "zone": nz_zone,
-                "hour": now,
-                "price_ckwh": price_ckwh,
-                "is_abnormal": is_abnormal,
-            })
+            rows.append({"zone": nz_zone, "hour": now, "price_ckwh": price_ckwh, "is_abnormal": is_abnormal})
             logger.info(f"EM6 {nz_zone} ({node_id}): {price_nzd_mwh} NZD/MWh = {price_ckwh} c/kWh")
         except (KeyError, ValueError, TypeError) as e:
             logger.warning(f"EM6 free parse error node={node_id}: {e}")
-
     logger.info(f"EM6 free fetched {len(rows)} NZ zone prices")
     return rows
-
 # ─── Spot price hot path ───────────────────────────────────────────────────
 
 def get_spot_price(zone: str = "FI") -> Optional[float]:
@@ -657,7 +641,6 @@ def get_spot_price(zone: str = "FI") -> Optional[float]:
         cached = None
     if cached:
         return float(cached)
-
     logger.info(f"Redis miss zone={zone} — falling back to Supabase")
     now = datetime.now(timezone.utc)
     try:
@@ -684,7 +667,6 @@ def save_day_ahead_to_supabase(zone: str, rows: list[dict]):
         if key not in seen:
             seen.add(key)
             unique_rows.append(r)
-
     records = [
         {
             "zone": zone,
@@ -746,24 +728,20 @@ def convert_price_ckwh(price_ckwh_eur: Optional[float], currency: str) -> Option
 def get_cheapest_hours(zone: str, n_hours: int = 5, window_h: int = 24) -> dict:
     if zone in NZ_ZONES:
         return {
-            "available": False,
-            "zone": zone,
+            "available": False, "zone": zone,
             "reason": "New Zealand uses 30-minute real-time trading periods (NZEM). "
                       "Day-ahead price forecasts are not publicly available. "
                       "Use spot_price for current NZD pricing.",
             "powered_by": "Elecz.com",
         }
-
     if zone in AU_ZONES:
         return {
-            "available": False,
-            "zone": zone,
+            "available": False, "zone": zone,
             "reason": "Day-ahead price data is not publicly available for Australian NEM zones. "
                       "Real-time 5-minute spot data is available via spot_price. "
                       "For half-hourly forward prices, consider Amber Electric (registration required).",
             "powered_by": "Elecz.com",
         }
-
     now = datetime.now(timezone.utc)
     cutoff = now + timedelta(hours=window_h)
     currency = ZONE_CURRENCY.get(zone, "EUR")
@@ -777,14 +755,11 @@ def get_cheapest_hours(zone: str, n_hours: int = 5, window_h: int = 24) -> dict:
     except Exception as e:
         logger.error(f"Cheapest hours DB failed: {e}")
         rows = []
-
     if not rows:
         return {"available": False, "reason": "No price data available."}
-
     cheapest = rows[:n_hours]
     all_prices = [r["price_ckwh"] for r in rows]
     avg = sum(all_prices) / len(all_prices) if all_prices else 0
-
     try:
         result_chrono = supabase.table("prices_day_ahead").select(
             "hour, price_ckwh"
@@ -795,10 +770,8 @@ def get_cheapest_hours(zone: str, n_hours: int = 5, window_h: int = 24) -> dict:
     except Exception as e:
         logger.error(f"Cheapest hours chrono fetch failed: {e}")
         rows_chrono = sorted(rows, key=lambda r: r["hour"])
-
     window_slots = 6 if zone in GB_ZONES else 3
     best_window = _best_consecutive_window(rows_chrono, window_slots)
-
     current_price = get_spot_price(zone) or avg
     if current_price < avg * CHEAP_THRESHOLD:
         energy_state, confidence = "cheap", 0.90
@@ -806,24 +779,11 @@ def get_cheapest_hours(zone: str, n_hours: int = 5, window_h: int = 24) -> dict:
         energy_state, confidence = "expensive", 0.88
     else:
         energy_state, confidence = "normal", 0.75
-
     unit = ZONE_UNIT_LOCAL.get(currency, "c/kWh")
-
     return {
-        "available": True,
-        "zone": zone,
-        "currency": currency,
-        "unit": unit,
-        "energy_state": energy_state,
-        "confidence": confidence,
-        "cheapest_hours": [
-            {
-                "hour": r["hour"][:16],
-                "price": r["price_ckwh"],
-                "unit": unit,
-            }
-            for r in cheapest
-        ],
+        "available": True, "zone": zone, "currency": currency, "unit": unit,
+        "energy_state": energy_state, "confidence": confidence,
+        "cheapest_hours": [{"hour": r["hour"][:16], "price": r["price_ckwh"], "unit": unit} for r in cheapest],
         "best_3h_window": best_window,
         "avoid_hours": _expensive_hours(rows, avg),
         "recommendation": _consumption_recommendation(energy_state),
@@ -844,6 +804,7 @@ def _best_consecutive_window(rows: list, window: int) -> Optional[dict]:
     return {"start": best_start, "end": best_end, "avg_price": round(best_avg, 4),
             "note": "end is the start of the last cheap slot in the window"}
 
+
 def _expensive_hours(rows: list, avg: float) -> list[str]:
     return [r["hour"][:16] for r in rows if r["price_ckwh"] > avg * 1.3][:6]
 
@@ -854,281 +815,116 @@ def _consumption_recommendation(state: str) -> str:
     if state == "expensive":
         return "avoid_high_consumption"
     return "normal_usage"
-
 # ─── Contract scraping ─────────────────────────────────────────────────────
 
 def scrape_provider(provider: str, url: str, zone: str) -> Optional[dict]:
     now_iso = datetime.now(timezone.utc).isoformat()
 
     if zone == "NZ":
-        prompt = f"""
-Search for the current electricity contract pricing from this provider: {url}
+        prompt = f"""Search for the current electricity contract pricing from this provider: {url}
 Provider: {provider}, Market: New Zealand (NZEM)
 
 Return pricing in New Zealand cents per kWh (NZD c/kWh) including GST (15%).
 If price is listed as NZD/kWh, multiply by 100.
 
 Provider-specific rules:
-- mercury_energy: return their standard fixed tariff, contract_type = "fixed". Return usage rate as arbeitspreis_ckwh.
-- contact_energy: return their standard fixed tariff, contract_type = "fixed". Return usage rate as arbeitspreis_ckwh.
-- contact_energy_ev: return their EV-specific tariff if available, contract_type = "fixed". Return usage rate as arbeitspreis_ckwh.
-- genesis_energy: return their standard fixed tariff, contract_type = "fixed". Note Genesis has a partnership with ChargeNet EV network.
-- meridian_energy: return their standard fixed tariff, contract_type = "fixed". Note Meridian acquired Flick Electric in July 2025 and now covers former Flick customers. Return usage rate as arbeitspreis_ckwh.
-- electric_kiwi: return their cheapest fixed tariff, contract_type = "fixed". Return usage rate as arbeitspreis_ckwh. Note Electric Kiwi offers "Hour of Power" — one free hour of electricity per day.
+- mercury_energy: standard fixed tariff, contract_type = "fixed"
+- contact_energy: standard fixed tariff, contract_type = "fixed"
+- contact_energy_ev: EV-specific tariff, contract_type = "fixed"
+- genesis_energy: standard fixed tariff, contract_type = "fixed". ChargeNet EV partner.
+- meridian_energy: standard fixed tariff, contract_type = "fixed". Acquired Flick Electric July 2025.
+- electric_kiwi: cheapest fixed tariff, contract_type = "fixed". Offers Hour of Power daily.
 
-Note: No NZ retailer currently offers real-time spot pass-through pricing (Flick Electric was acquired by Meridian in July 2025).
-Typical NZ residential usage rates are between 20 and 40 NZD c/kWh incl GST.
-Daily supply charge is typically 50-120 NZD c/day.
+Note: No NZ retailer currently offers spot pass-through (Flick acquired by Meridian July 2025).
+Typical NZ usage rates: 20-40 NZD c/kWh incl GST. Daily supply charge: 50-120 NZD c/day.
 
-Return ONLY a valid JSON object with no markdown, no explanation:
-{{
-  "provider": "{provider}",
-  "zone": "NZ",
-  "spot_margin_ckwh": null,
-  "arbeitspreis_ckwh": <float or null>,
-  "basic_fee_eur_month": null,
-  "fixed_price_ckwh": <float or null>,
-  "contract_type": "fixed" | "variable",
-  "contract_duration_months": <int or null>,
-  "new_customers_only": false,
-  "below_wholesale": false,
-  "is_spot": false,
-  "is_fixed": <bool>,
-  "price_includes_tax": true,
-  "standing_charge_p_day": <float or null>,
-  "currency": "NZD",
-  "reliability": "high" | "medium" | "low",
-  "scraped_at": "{now_iso}"
-}}
-Note: arbeitspreis_ckwh is usage rate in NZD c/kWh incl GST (15%). standing_charge_p_day is in NZD cents per day.
-"""
-        for attempt in range(3):
-            try:
-                response = gemini_model.generate_content(prompt)
-                text = response.text.strip()
-                break
-            except Exception as e:
-                logger.error(f"Gemini attempt {attempt+1} failed NZ/{provider}: {e}")
-                if attempt < 2:
-                    time.sleep(2 * (attempt + 1))
-                else:
-                    return None
-        try:
-            match = re.search(r"\{.*\}", text, re.DOTALL)
-            if not match:
-                logger.error(f"No JSON in Gemini response NZ/{provider}: {text[:300]}")
-                return None
-            data = json.loads(match.group())
-        except json.JSONDecodeError as je:
-            logger.error(f"Invalid JSON from Gemini NZ/{provider}: {je}")
-            return None
-
-        # No spot retailers in NZ as of July 2025 (Flick acquired by Meridian)
-        data["is_spot"] = False
-        data["spot_margin_ckwh"] = None
-        data["scraped_at"] = now_iso
-        data["currency"] = "NZD"
-        logger.info(f" ✓ NZ/{provider}")
-        return data
+Return ONLY valid JSON, no markdown:
+{{"provider": "{provider}", "zone": "NZ", "spot_margin_ckwh": null,
+"arbeitspreis_ckwh": null, "basic_fee_eur_month": null, "fixed_price_ckwh": null,
+"contract_type": "fixed", "contract_duration_months": null, "new_customers_only": false,
+"below_wholesale": false, "is_spot": false, "is_fixed": true, "price_includes_tax": true,
+"standing_charge_p_day": null, "currency": "NZD", "reliability": "high", "scraped_at": "{now_iso}"}}"""
 
     elif zone == "AU":
-        prompt = f"""
-Search for the current electricity contract pricing from this provider: {url}
+        prompt = f"""Search for the current electricity contract pricing from this provider: {url}
 Provider: {provider}, Market: Australia (NEM)
 
 Return pricing in Australian cents per kWh (AUD c/kWh) including GST (10%).
-If price is listed as AUD/kWh, multiply by 100.
 
 Provider-specific rules:
-- amber: contract_type = "dynamic", is_spot = true. Amber passes through NEM spot prices + service fee. The service fee (spot_margin_ckwh) is typically between 9 and 15 AUD c/kWh. You MUST return a numeric value for spot_margin_ckwh — do not return null. If you cannot find the exact current fee, use 11.0 as a reasonable estimate.
-- agl: return their standard variable tariff, contract_type = "variable". Return usage rate as arbeitspreis_ckwh.
-- origin: return their standard variable tariff, contract_type = "variable". Return usage rate as arbeitspreis_ckwh.
-- energy_australia: return their standard variable tariff, contract_type = "variable". Return usage rate as arbeitspreis_ckwh.
-- red_energy: return their standard fixed tariff, contract_type = "fixed". Return usage rate as fixed_price_ckwh.
-- alinta: return their standard variable tariff, contract_type = "variable". Return usage rate as arbeitspreis_ckwh.
+- amber: contract_type = "dynamic", is_spot = true. spot_margin_ckwh is the service fee (9-15 AUD c/kWh). MUST return numeric value — use 11.0 if unknown.
+- agl: standard variable tariff, contract_type = "variable"
+- origin: standard variable tariff, contract_type = "variable"
+- energy_australia: standard variable tariff, contract_type = "variable"
+- red_energy: standard fixed tariff, contract_type = "fixed"
+- alinta: standard variable tariff, contract_type = "variable"
 
-Typical AU residential usage rates are between 20 and 45 AUD c/kWh incl GST.
-Daily supply charge (standing charge) is typically 80-130 AUD c/day.
+Typical AU usage rates: 20-45 AUD c/kWh incl GST. Daily supply charge: 80-130 AUD c/day.
 
-Return ONLY a valid JSON object with no markdown, no explanation:
-{{
-  "provider": "{provider}",
-  "zone": "AU",
-  "spot_margin_ckwh": <float or null>,
-  "arbeitspreis_ckwh": <float or null>,
-  "basic_fee_eur_month": <float or null>,
-  "fixed_price_ckwh": <float or null>,
-  "contract_type": "dynamic" | "variable" | "fixed",
-  "contract_duration_months": <int or null>,
-  "new_customers_only": false,
-  "below_wholesale": false,
-  "is_spot": <bool>,
-  "is_fixed": <bool>,
-  "price_includes_tax": true,
-  "standing_charge_p_day": <float or null>,
-  "currency": "AUD",
-  "reliability": "high" | "medium" | "low",
-  "scraped_at": "{now_iso}"
-}}
-Note: arbeitspreis_ckwh is usage rate in AUD c/kWh incl GST. standing_charge_p_day is in AUD cents per day.
-"""
-        for attempt in range(3):
-            try:
-                response = gemini_model.generate_content(prompt)
-                text = response.text.strip()
-                break
-            except Exception as e:
-                logger.error(f"Gemini attempt {attempt+1} failed AU/{provider}: {e}")
-                if attempt < 2:
-                    time.sleep(2 * (attempt + 1))
-                else:
-                    return None
-        try:
-            match = re.search(r"\{.*\}", text, re.DOTALL)
-            if not match:
-                logger.error(f"No JSON in Gemini response AU/{provider}: {text[:300]}")
-                return None
-            data = json.loads(match.group())
-        except json.JSONDecodeError as je:
-            logger.error(f"Invalid JSON from Gemini AU/{provider}: {je}")
-            return None
-
-        if provider == "amber":
-            data["contract_type"] = "dynamic"
-            data["is_spot"] = True
-
-        data["scraped_at"] = now_iso
-        data["currency"] = "AUD"
-        logger.info(f" ✓ AU/{provider}")
-        return data
+Return ONLY valid JSON, no markdown:
+{{"provider": "{provider}", "zone": "AU", "spot_margin_ckwh": null,
+"arbeitspreis_ckwh": null, "basic_fee_eur_month": null, "fixed_price_ckwh": null,
+"contract_type": "variable", "contract_duration_months": null, "new_customers_only": false,
+"below_wholesale": false, "is_spot": false, "is_fixed": false, "price_includes_tax": true,
+"standing_charge_p_day": null, "currency": "AUD", "reliability": "high", "scraped_at": "{now_iso}"}}"""
 
     elif zone == "GB":
-        prompt = f"""
-Search for the current electricity tariff pricing from this provider: {url}
+        prompt = f"""Search for the current electricity tariff pricing from this provider: {url}
 Provider: {provider}, Market: United Kingdom (GB)
 
 Return pricing in pence per kWh (p/kWh) including VAT (5%).
 
 Provider-specific rules:
-- octopus_agile: contract_type = "dynamic", is_spot = true. Return current average unit rate as arbeitspreis_ckwh if available.
-- octopus_go: contract_type = "tou", return the off-peak rate (23:30-05:30) as fixed_price_ckwh.
-- octopus_intelligent: contract_type = "tou", is_spot = false. EV-optimised tariff, return off-peak rate as fixed_price_ckwh.
-- ofgem_svt: contract_type = "variable", return current Ofgem price cap unit rate in p/kWh as arbeitspreis_ckwh.
-- british_gas: return their standard variable tariff as contract_type = "variable", arbeitspreis_ckwh in p/kWh.
-- eon_next: return their standard tariff, contract_type = "variable" or "fixed" depending on what is current.
-- ovo_energy: return their standard tariff, contract_type = "variable".
-- edf_energy: return their standard tariff, contract_type = "variable" or "fixed".
-- scottish_power: return their standard tariff, contract_type = "variable".
-- shell_energy: return their standard tariff, contract_type = "variable".
-- so_energy: return their standard tariff, contract_type = "variable" or "fixed".
+- octopus_agile: contract_type = "dynamic", is_spot = true
+- octopus_go: contract_type = "tou", off-peak rate as fixed_price_ckwh
+- octopus_intelligent: contract_type = "tou", EV-optimised
+- ofgem_svt: contract_type = "variable", Ofgem price cap unit rate
+- british_gas/eon_next/ovo_energy/edf_energy/scottish_power/shell_energy/so_energy: contract_type = "variable"
 
-Return ONLY a valid JSON object with no markdown, no explanation:
-{{
-  "provider": "{provider}",
-  "zone": "{zone}",
-  "spot_margin_ckwh": null,
-  "arbeitspreis_ckwh": <float or null>,
-  "basic_fee_eur_month": null,
-  "fixed_price_ckwh": <float or null>,
-  "contract_type": "dynamic" | "tou" | "variable" | "fixed",
-  "contract_duration_months": <int or null>,
-  "new_customers_only": false,
-  "below_wholesale": false,
-  "is_spot": <bool>,
-  "is_fixed": <bool>,
-  "price_includes_tax": true,
-  "standing_charge_p_day": <float or null>,
-  "currency": "GBP",
-  "reliability": "high" | "medium" | "low",
-  "scraped_at": "{now_iso}"
-}}
-Note: arbeitspreis_ckwh is the unit rate in p/kWh. Must be between 5 and 50 p/kWh for UK residential tariffs.
-standing_charge_p_day is in pence per day — typically 40-70p/day for UK tariffs.
-"""
-        for attempt in range(3):
-            try:
-                response = gemini_model.generate_content(prompt)
-                text = response.text.strip()
-                break
-            except Exception as e:
-                logger.error(f"Gemini attempt {attempt+1} failed {zone}/{provider}: {e}")
-                if attempt < 2:
-                    time.sleep(2 * (attempt + 1))
-                else:
-                    return None
-        try:
-            match = re.search(r"\{.*\}", text, re.DOTALL)
-            if not match:
-                logger.error(f"No JSON in Gemini response {zone}/{provider}: {text[:300]}")
-                return None
-            data = json.loads(match.group())
-        except json.JSONDecodeError as je:
-            logger.error(f"Invalid JSON from Gemini {zone}/{provider}: {je}")
-            return None
-        data["scraped_at"] = now_iso
-        logger.info(f" ✓ {zone}/{provider}")
-        return data
+Unit rate must be 5-50 p/kWh. Standing charge: 40-70 p/day.
+
+Return ONLY valid JSON, no markdown:
+{{"provider": "{provider}", "zone": "{zone}", "spot_margin_ckwh": null,
+"arbeitspreis_ckwh": null, "basic_fee_eur_month": null, "fixed_price_ckwh": null,
+"contract_type": "variable", "contract_duration_months": null, "new_customers_only": false,
+"below_wholesale": false, "is_spot": false, "is_fixed": false, "price_includes_tax": true,
+"standing_charge_p_day": null, "currency": "GBP", "reliability": "high", "scraped_at": "{now_iso}"}}"""
 
     elif zone == "DE":
-        prompt = f"""
-Search for the current electricity contract pricing from this provider: {url}
+        prompt = f"""Search for the current electricity contract pricing from this provider: {url}
 Provider: {provider}, Country/zone: {zone}
-Assume location: Berlin, PLZ 10115 (use as baseline if postcode is required).
+Assume location: Berlin, PLZ 10115.
 
-IMPORTANT: If provider is "tibber" and zone is "DE", set contract_type to "dynamic" and is_spot to true.
-Tibber Germany uses exchange-based dynamic pricing (Tibber Dynamic), not a fixed spot margin.
-Do not return a spot_margin_ckwh for Tibber DE — return arbeitspreis_ckwh as the current average effective price if available.
+IMPORTANT: If provider is "tibber" and zone is "DE", contract_type = "dynamic", is_spot = true, spot_margin_ckwh = null.
 
 Return Arbeitspreis as brutto ct/kWh including MwSt (19%).
-If price is listed as netto, multiply by 1.19.
-Ignore: Neukundenbonus, Sofortbonus, Treuebonus, promotional first-year prices, and campaign discounts.
-Return only the standard ongoing tariff price.
+If netto price, multiply by 1.19.
+Ignore: Neukundenbonus, Sofortbonus, promotional prices. Return only standard ongoing tariff.
 
-Return ONLY a valid JSON object with no markdown, no explanation:
-{{
-  "provider": "{provider}",
-  "zone": "{zone}",
-  "spot_margin_ckwh": <float or null>,
-  "arbeitspreis_ckwh": <float or null>,
-  "basic_fee_eur_month": <float or null>,
-  "fixed_price_ckwh": <float or null>,
-  "contract_type": "spot" | "fixed" | "fixed_term" | "dynamic",
-  "contract_duration_months": <int or null>,
-  "new_customers_only": <bool>,
-  "below_wholesale": <bool>,
-  "is_spot": <bool>,
-  "is_fixed": <bool>,
-  "price_includes_tax": <bool>,
-  "grundpreis_unit": "eur_month" | "eur_year",
-  "preisgarantie": "full" | "partial" | "none",
-  "reliability": "high" | "medium" | "low",
-  "scraped_at": "{now_iso}"
-}}
-Note: arbeitspreis_ckwh must be between 5 and 100 ct/kWh. If value seems to be in EUR/kWh, multiply by 100.
-is_spot=true if contract tracks exchange spot price. is_fixed=true if price is fixed for the contract duration.
-"""
+arbeitspreis_ckwh must be 5-100 ct/kWh. If in EUR/kWh, multiply by 100.
+
+Return ONLY valid JSON, no markdown:
+{{"provider": "{provider}", "zone": "{zone}", "spot_margin_ckwh": null,
+"arbeitspreis_ckwh": null, "basic_fee_eur_month": null, "fixed_price_ckwh": null,
+"contract_type": "fixed", "contract_duration_months": null, "new_customers_only": false,
+"below_wholesale": false, "is_spot": false, "is_fixed": false, "price_includes_tax": true,
+"grundpreis_unit": "eur_month", "preisgarantie": "none",
+"reliability": "high", "scraped_at": "{now_iso}"}}"""
+
     else:
-        prompt = f"""
-Search for the current electricity contract pricing from this provider: {url}
+        # Generic prompt for ENTSO-E zones (Nordic, ES, PT, HR, BG, SI, SK, GR, etc.)
+        prompt = f"""Search for the current electricity contract pricing from this provider: {url}
 Provider: {provider}, Country/zone: {zone}
 
-Find the current spot contract margin (ore/kWh or c/kWh), monthly basic fee, and any fixed price options.
-Return ONLY a valid JSON object with no markdown, no explanation:
-{{
-  "provider": "{provider}",
-  "zone": "{zone}",
-  "spot_margin_ckwh": <float or null>,
-  "arbeitspreis_ckwh": <float or null>,
-  "basic_fee_eur_month": <float or null>,
-  "fixed_price_ckwh": <float or null>,
-  "contract_type": "spot" | "fixed" | "fixed_term",
-  "contract_duration_months": <int or null>,
-  "new_customers_only": <bool>,
-  "below_wholesale": <bool>,
-  "scraped_at": "{now_iso}"
-}}
-"""
+Find the current spot contract margin (ore/kWh or c/kWh), monthly basic fee, and fixed price options.
+Return ONLY valid JSON, no markdown:
+{{"provider": "{provider}", "zone": "{zone}", "spot_margin_ckwh": null,
+"arbeitspreis_ckwh": null, "basic_fee_eur_month": null, "fixed_price_ckwh": null,
+"contract_type": "spot", "contract_duration_months": null,
+"new_customers_only": false, "below_wholesale": false, "scraped_at": "{now_iso}"}}"""
 
+    # Gemini call with retry
+    text = None
     for attempt in range(3):
         try:
             response = gemini_model.generate_content(prompt)
@@ -1141,30 +937,52 @@ Return ONLY a valid JSON object with no markdown, no explanation:
             else:
                 return None
 
+    # Parse JSON — response_mime_type=application/json gives clean JSON,
+    # regex fallback handles any unexpected wrapper text
     try:
-        match = re.search(r"\{.*\}", text, re.DOTALL)
+        data = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        match = re.search(r"\{.*\}", text or "", re.DOTALL)
         if not match:
-            logger.error(f"No JSON object found in Gemini response {zone}/{provider}: {text[:300]}")
+            logger.error(f"No JSON in Gemini response {zone}/{provider}: {(text or '')[:300]}")
             return None
-        data = json.loads(match.group())
-    except json.JSONDecodeError as je:
-        logger.error(f"Invalid JSON from Gemini {zone}/{provider}: {je} — raw: {text[:300]}")
-        return None
+        try:
+            data = json.loads(match.group())
+        except json.JSONDecodeError as je:
+            logger.error(f"Invalid JSON from Gemini {zone}/{provider}: {je}")
+            return None
 
     data["scraped_at"] = now_iso
 
-    if data.get("arbeitspreis_ckwh") and data["arbeitspreis_ckwh"] > 100:
-        logger.warning(f"arbeitspreis_ckwh={data['arbeitspreis_ckwh']} looks like EUR/kWh, dividing by 100")
-        data["arbeitspreis_ckwh"] = round(data["arbeitspreis_ckwh"] / 100, 4)
-
-    if data.get("arbeitspreis_ckwh") and data["arbeitspreis_ckwh"] < 5:
-        logger.warning(f"arbeitspreis_ckwh={data['arbeitspreis_ckwh']} too low, flagging data_errors")
-        data["data_errors"] = True
-
-    if provider == "tibber" and zone == "DE":
-        data["contract_type"] = "dynamic"
-        data["is_spot"] = True
+    # Zone-specific post-processing
+    if zone == "NZ":
+        data["is_spot"] = False
         data["spot_margin_ckwh"] = None
+        data["currency"] = "NZD"
+    elif zone == "AU":
+        if provider == "amber":
+            data["contract_type"] = "dynamic"
+            data["is_spot"] = True
+        data["currency"] = "AUD"
+    elif zone == "DE":
+        if provider == "tibber":
+            data["contract_type"] = "dynamic"
+            data["is_spot"] = True
+            data["spot_margin_ckwh"] = None
+        if data.get("arbeitspreis_ckwh") and data["arbeitspreis_ckwh"] > 100:
+            logger.warning(f"arbeitspreis_ckwh={data['arbeitspreis_ckwh']} looks like EUR/kWh, dividing by 100")
+            data["arbeitspreis_ckwh"] = round(data["arbeitspreis_ckwh"] / 100, 4)
+        if data.get("arbeitspreis_ckwh") and data["arbeitspreis_ckwh"] < 5:
+            logger.warning(f"arbeitspreis_ckwh={data['arbeitspreis_ckwh']} too low, flagging")
+            data["data_errors"] = True
+    elif zone not in ("GB",):
+        # Generic ENTSO-E zones (Nordic, ES, PT, etc.)
+        if data.get("arbeitspreis_ckwh") and data["arbeitspreis_ckwh"] > 100:
+            logger.warning(f"arbeitspreis_ckwh={data['arbeitspreis_ckwh']} looks like EUR/kWh, dividing by 100")
+            data["arbeitspreis_ckwh"] = round(data["arbeitspreis_ckwh"] / 100, 4)
+        if data.get("arbeitspreis_ckwh") and data["arbeitspreis_ckwh"] < 5:
+            logger.warning(f"arbeitspreis_ckwh={data['arbeitspreis_ckwh']} too low, flagging")
+            data["data_errors"] = True
 
     logger.info(f" ✓ {zone}/{provider}")
     return data
@@ -1173,7 +991,7 @@ Return ONLY a valid JSON object with no markdown, no explanation:
 def update_contract_prices():
     logger.info("Updating contract prices...")
     for zone, providers in PROVIDER_URLS.items():
-        db_zone = zone if zone in ("AU", "NZ", "GB") else zone
+        db_zone = zone
         for provider, url in providers.items():
             data = scrape_provider(provider, url, zone)
             if data:
@@ -1189,12 +1007,10 @@ def update_contract_prices():
                     logger.info(f" ✓ {db_zone}/{provider}")
                 except Exception as e:
                     logger.error(f" ✗ {db_zone}/{provider}: {e}")
-            # ── MUUTOS: throttle Gemini calls to stay well under 10 RPM free tier ──
+            # Throttle Gemini calls to stay well under 10 RPM free tier
             time.sleep(7)
         redis_client.delete(f"elecz:contracts:{db_zone}")
     logger.info("Contract update complete.")
-
-
 def _fetch_and_save_zone(zone: str):
     if zone in GB_ZONES or zone in AU_ZONES or zone in NZ_ZONES or zone in CAISO_ZONES:
         return
@@ -1219,10 +1035,14 @@ def _fetch_and_save_zone(zone: str):
 
 
 def update_nordic_spots():
-    logger.info("Updating Nordic + Baltic spot prices...")
+    logger.info("Updating Nordic + Baltic + Southern Europe spot prices...")
+    # Nordic + Baltics — hourly ENTSO-E day-ahead
     for zone in ["FI", "SE", "NO", "DK", "EE", "LV", "LT"]:
         _fetch_and_save_zone(zone)
-    logger.info("Nordic + Baltic spot prices refreshed.")
+    # Southern Europe batch 2 — same ENTSO-E cadence
+    for zone in ["ES", "PT", "HR", "BG", "SI", "SK", "GR"]:
+        _fetch_and_save_zone(zone)
+    logger.info("Nordic + Baltic + Southern Europe spot prices refreshed.")
 
 
 def update_de_spot():
@@ -1239,7 +1059,6 @@ def update_gb_spot():
     if not rows:
         logger.warning("Octopus Agile returned no rows")
         return
-
     records = []
     seen = set()
     for r in rows:
@@ -1248,35 +1067,25 @@ def update_gb_spot():
             continue
         seen.add(key)
         records.append({
-            "zone": zone,
-            "hour": r["hour"].isoformat(),
-            "price_eur_mwh": None,
-            "price_ckwh": r["price_ckwh"],
+            "zone": zone, "hour": r["hour"].isoformat(),
+            "price_eur_mwh": None, "price_ckwh": r["price_ckwh"],
             "is_abnormal": r.get("is_abnormal", False),
             "source": "octopus_agile",
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
-
     if records:
         try:
-            supabase.table("prices_day_ahead").upsert(
-                records, on_conflict="zone,hour"
-            ).execute()
+            supabase.table("prices_day_ahead").upsert(records, on_conflict="zone,hour").execute()
             logger.info(f"Saved {len(records)} Agile rows to Supabase")
         except Exception as e:
             logger.error(f"Supabase GB save failed: {e}")
-
     now = datetime.now(timezone.utc)
-    current_slot = now.replace(
-        minute=0 if now.minute < 30 else 30,
-        second=0, microsecond=0
-    )
+    current_slot = now.replace(minute=0 if now.minute < 30 else 30, second=0, microsecond=0)
     for r in rows:
         if r["hour"] == current_slot:
             redis_client.setex(f"elecz:spot:{zone}", 1800, str(r["price_ckwh"]))
             logger.info(f"Cached GB spot: {r['price_ckwh']} p/kWh")
             break
-
     logger.info("GB spot prices refreshed.")
 
 
@@ -1285,12 +1094,8 @@ def _update_au_medians():
     for zone in AU_ZONES:
         try:
             result = supabase.table("prices_day_ahead").select("price_ckwh").eq(
-                "zone", zone
-            ).gte("hour", cutoff).execute()
-            prices = sorted([
-                r["price_ckwh"] for r in (result.data or [])
-                if r["price_ckwh"] is not None
-            ])
+                "zone", zone).gte("hour", cutoff).execute()
+            prices = sorted([r["price_ckwh"] for r in (result.data or []) if r["price_ckwh"] is not None])
             if prices:
                 mid = len(prices) // 2
                 median = prices[mid] if len(prices) % 2 else (prices[mid - 1] + prices[mid]) / 2
@@ -1306,26 +1111,18 @@ def update_au_spot():
     if not rows:
         logger.warning("AEMO returned no rows")
         return
-
     now = datetime.now(timezone.utc)
-    current_slot = now.replace(
-        minute=0 if now.minute < 30 else 30,
-        second=0, microsecond=0
-    )
-
+    current_slot = now.replace(minute=0 if now.minute < 30 else 30, second=0, microsecond=0)
     records = []
     for r in rows:
         zone = r["zone"]
         price = r["price_ckwh"]
-
         try:
             hist = supabase.table("prices_day_ahead").select("price_ckwh").eq(
-                "zone", zone
-            ).order("hour", desc=True).limit(6).execute()
+                "zone", zone).order("hour", desc=True).limit(6).execute()
             hist_prices = [h["price_ckwh"] for h in (hist.data or []) if h["price_ckwh"] is not None]
         except Exception:
             hist_prices = []
-
         if len(hist_prices) >= 3:
             avg_hist = sum(hist_prices) / len(hist_prices)
             variance = sum((p - avg_hist) ** 2 for p in hist_prices) / len(hist_prices)
@@ -1336,62 +1133,44 @@ def update_au_spot():
             avg_hist = price
             volatility_index = 0.0
             is_spike_short = False
-
         try:
             median_raw = redis_client.get(f"elecz:au_median:{zone}")
             median_30d = float(median_raw) if median_raw else avg_hist
         except Exception:
             median_30d = avg_hist
-
         spike_risk = bool(is_spike_short or (median_30d > 0 and price > median_30d * 3))
         solar_soak = bool(price <= 2.0)
-
         if price < 0 or price < median_30d * 0.5:
             au_action = "charge"
         elif price > median_30d * 2.0 or spike_risk:
             au_action = "discharge"
         else:
             au_action = "hold"
-
         redis_client.setex(f"elecz:spot:{zone}", 2100, str(price))
         redis_client.setex(f"elecz:au_volatility:{zone}", 2100, str(volatility_index))
         redis_client.setex(f"elecz:au_spike:{zone}", 2100, "1" if spike_risk else "0")
         redis_client.setex(f"elecz:au_solar_soak:{zone}", 2100, "1" if solar_soak else "0")
         redis_client.setex(f"elecz:au_action:{zone}", 2100, au_action)
-
-        logger.info(
-            f"Cached AU spot {zone}: {price} AUD c/kWh | "
-            f"volatility={volatility_index} spike={spike_risk} soak={solar_soak} action={au_action}"
-        )
-
+        logger.info(f"Cached AU spot {zone}: {price} AUD c/kWh | volatility={volatility_index} spike={spike_risk} soak={solar_soak} action={au_action}")
         records.append({
-            "zone": zone,
-            "hour": current_slot.isoformat(),
-            "price_eur_mwh": None,
-            "price_ckwh": price,
+            "zone": zone, "hour": current_slot.isoformat(),
+            "price_eur_mwh": None, "price_ckwh": price,
             "is_abnormal": r.get("is_abnormal", False),
-            "source": "AEMO",
-            "created_at": now.isoformat(),
+            "source": "AEMO", "created_at": now.isoformat(),
         })
-
     _update_au_medians()
-
     if records:
         try:
-            supabase.table("prices_day_ahead").upsert(
-                records, on_conflict="zone,hour"
-            ).execute()
+            supabase.table("prices_day_ahead").upsert(records, on_conflict="zone,hour").execute()
             logger.info(f"Saved {len(records)} AEMO rows to Supabase")
         except Exception as e:
             logger.error(f"Supabase AU save failed: {e}")
-
     logger.info("AU spot prices refreshed.")
 
 
 def update_nz_spot():
-    """Scheduler job: update NZ spot prices from EA Real-Time Dispatch API — runs every 30 min.
+    """Scheduler job: update NZ spot prices from EM6 real-time API — runs every 30 min.
     Uses HAY2201 (Haywards) for NI and BEN2201 (Benmore) for SI — industry standard reference nodes.
-    EA RTD updates every 5 minutes; 30-minute polling is sufficient for our use case.
     Also computes island_spread (NI vs SI price divergence) and hvdc_direction.
     """
     logger.info("Updating NZ spot prices...")
@@ -1399,69 +1178,48 @@ def update_nz_spot():
     if not rows:
         logger.warning("EM6 returned no rows")
         return
-
     now = datetime.now(timezone.utc)
-    current_slot = now.replace(
-        minute=0 if now.minute < 30 else 30,
-        second=0, microsecond=0
-    )
-
+    current_slot = now.replace(minute=0 if now.minute < 30 else 30, second=0, microsecond=0)
     prices_by_zone = {}
     records = []
     for r in rows:
         zone = r["zone"]
         price = r["price_ckwh"]
         prices_by_zone[zone] = price
-
         redis_client.setex(f"elecz:spot:{zone}", 2100, str(price))
         logger.info(f"Cached NZ spot {zone}: {price} NZD c/kWh")
-
         records.append({
-            "zone": zone,
-            "hour": current_slot.isoformat(),
-            "price_eur_mwh": None,
-            "price_ckwh": price,
+            "zone": zone, "hour": current_slot.isoformat(),
+            "price_eur_mwh": None, "price_ckwh": price,
             "is_abnormal": r.get("is_abnormal", False),
-            "source": "EM6",
-            "created_at": now.isoformat(),
+            "source": "EM6", "created_at": now.isoformat(),
         })
-
     # Compute island spread — NI vs SI divergence
     ni_price = prices_by_zone.get("NZ-NI")
     si_price = prices_by_zone.get("NZ-SI")
     if ni_price is not None and si_price is not None:
         spread = round(ni_price - si_price, 4)  # positive = NI more expensive
         spread_pct = round(abs(spread) / max(si_price, ni_price, 0.01) * 100, 1)
-
         if spread_pct < 10:
             hvdc_direction = "balanced"
         elif spread > 0:
             hvdc_direction = "north"   # power flowing north, NI more expensive
         else:
             hvdc_direction = "south"   # unusual, SI more expensive
-
         island_spread_data = {
-            "ni_price": ni_price,
-            "si_price": si_price,
-            "spread_ckwh": spread,
-            "spread_pct": spread_pct,
-            "hvdc_direction": hvdc_direction,
-            "ni_premium": spread > 0,
+            "ni_price": ni_price, "si_price": si_price,
+            "spread_ckwh": spread, "spread_pct": spread_pct,
+            "hvdc_direction": hvdc_direction, "ni_premium": spread > 0,
         }
         redis_client.setex("elecz:nz_island_spread", 2100, json.dumps(island_spread_data))
         logger.info(f"NZ island spread: NI={ni_price} SI={si_price} spread={spread} direction={hvdc_direction}")
-
     if records:
         try:
-            supabase.table("prices_day_ahead").upsert(
-                records, on_conflict="zone,hour"
-            ).execute()
+            supabase.table("prices_day_ahead").upsert(records, on_conflict="zone,hour").execute()
             logger.info(f"Saved {len(records)} EM6 rows to Supabase")
         except Exception as e:
             logger.error(f"Supabase NZ save failed: {e}")
-
     logger.info("NZ spot prices refreshed.")
-
 # ─── Contracts cache ───────────────────────────────────────────────────────
 
 def get_contracts(zone: str) -> list:
@@ -1499,7 +1257,10 @@ def trust_score(contract: dict) -> int:
 
 def decision_hint(spot: float, contract: dict, consumption: int, heating: str, zone: str = "FI") -> dict:
     de_high_consumption = zone == "DE" and consumption >= 3500
-    nordic_low_consumption = zone not in GB_ZONES and zone not in AU_ZONES and zone not in NZ_ZONES and zone != "DE" and consumption <= 2000
+    nordic_low_consumption = (
+        zone not in GB_ZONES and zone not in AU_ZONES and
+        zone not in NZ_ZONES and zone != "DE" and consumption <= 2000
+    )
     gb_zone = zone in GB_ZONES
     au_zone = zone in AU_ZONES
     nz_zone = zone in NZ_ZONES
@@ -1507,30 +1268,25 @@ def decision_hint(spot: float, contract: dict, consumption: int, heating: str, z
     if nz_zone:
         if spot and spot < 5.0:
             return {"hint": "stay_spot", "reason": "Low NZEM spot price now. Compare against fixed tariffs for your usage."}
-        else:
-            return {"hint": "compare_options", "reason": "Compare fixed tariffs — no spot pass-through retailers currently available in NZ."}
+        return {"hint": "compare_options", "reason": "Compare fixed tariffs — no spot pass-through retailers currently available in NZ."}
     if au_zone:
         if spot and spot < 5.0:
             return {"hint": "stay_spot", "reason": "Low NEM spot price now. Amber dynamic tariff is cheapest."}
-        else:
-            return {"hint": "compare_options", "reason": "Compare Amber dynamic vs fixed tariff for your usage."}
+        return {"hint": "compare_options", "reason": "Compare Amber dynamic vs fixed tariff for your usage."}
     if gb_zone:
         if spot and spot < 10.0:
             return {"hint": "stay_spot", "reason": "Low Agile price now. Dynamic tariff is cheapest."}
-        else:
-            return {"hint": "compare_options", "reason": "Compare Agile dynamic vs fixed tariff for your usage."}
+        return {"hint": "compare_options", "reason": "Compare Agile dynamic vs fixed tariff for your usage."}
     if nordic_low_consumption and heating == "district":
         return {"hint": "spot_recommended", "reason": "Low consumption: minimize basic fee. Spot is cheapest long-term."}
     if de_high_consumption:
         if spot and spot < 5.0:
             return {"hint": "stay_spot", "reason": "High consumption + low spot price. Dynamic/spot contract is cheapest now."}
-        else:
-            return {"hint": "consider_fixed", "reason": "High consumption + elevated spot price. Fixed Arbeitspreis offers cost certainty."}
+        return {"hint": "consider_fixed", "reason": "High consumption + elevated spot price. Fixed Arbeitspreis offers cost certainty."}
     if consumption >= 15000:
         if spot and spot < 5.0:
             return {"hint": "stay_spot", "reason": "High consumption + low spot price. Spot is cheapest now."}
-        else:
-            return {"hint": "consider_fixed", "reason": "High consumption + elevated spot. Fixed price offers certainty."}
+        return {"hint": "consider_fixed", "reason": "High consumption + elevated spot. Fixed price offers certainty."}
     return {"hint": "compare_options", "reason": "Compare spot margin + basic fee vs fixed price for your consumption."}
 
 
@@ -1542,31 +1298,27 @@ def _annual_cost(contract: dict, spot: Optional[float], consumption: int) -> Opt
     contract_type = contract.get("contract_type", "")
     standing = (contract.get("standing_charge_p_day") or 0) * 365 / 100
 
-    if contract_type in ("dynamic",):
+    if contract_type == "dynamic":
         if arbeitspreis:
             return round((arbeitspreis / 100) * consumption + fee * 12 + standing, 2)
         if spot is not None:
-            effective_spot = max(spot, 0.0)
-            return round((effective_spot / 100) * consumption + fee * 12 + standing, 2)
+            return round((max(spot, 0.0) / 100) * consumption + fee * 12 + standing, 2)
         return None
-
-    if contract_type in ("spot",):
+    if contract_type == "spot":
         if spot is not None:
             return round(((spot + margin) / 100) * consumption + fee * 12 + standing, 2)
         return None
-
     if contract_type in ("fixed", "fixed_term"):
         rate = fixed or arbeitspreis
         if rate:
             return round((rate / 100) * consumption + fee * 12 + standing, 2)
         return None
-
     if contract_type in ("variable", "tou"):
         rate = arbeitspreis or fixed
         if rate:
             return round((rate / 100) * consumption + fee * 12 + standing, 2)
         return None
-
+    # Fallback
     rate = fixed or arbeitspreis
     if rate:
         return round((rate / 100) * consumption + fee * 12 + standing, 2)
@@ -1576,10 +1328,7 @@ def _annual_cost(contract: dict, spot: Optional[float], consumption: int) -> Opt
 
 
 def build_signal(
-    zone: str,
-    consumption: int,
-    postcode: str,
-    heating: str,
+    zone: str, consumption: int, postcode: str, heating: str,
     current_annual_cost: Optional[float] = None,
 ) -> dict:
     spot = get_spot_price(zone)
@@ -1598,7 +1347,6 @@ def build_signal(
         ts = trust_score(c)
         annual = _annual_cost(c, spot, consumption)
         ranked.append({**c, "trust_score": ts, "annual_cost_estimate": round(annual, 2) if annual is not None else None})
-
     ranked.sort(key=lambda x: (x["annual_cost_estimate"] is None, x["annual_cost_estimate"] or 0, -x["trust_score"]))
 
     spot_ranked = [c for c in ranked if c.get("contract_type") in ("spot", "dynamic")]
@@ -1617,7 +1365,6 @@ def build_signal(
 
     action_url = f"https://elecz.com/go/{quote(action_provider)}" if action_provider else None
     confidence = base_confidence
-
     gb_zone = zone in GB_ZONES
     au_zone = zone in AU_ZONES
     nz_zone = zone in NZ_ZONES
@@ -1631,7 +1378,6 @@ def build_signal(
             cheap_threshold, expensive_threshold = 5.0, 25.0
         else:
             cheap_threshold, expensive_threshold = 3.0, 8.0
-
         if spot < 0:
             energy_state = "negative"
         elif spot < cheap_threshold:
@@ -1644,7 +1390,6 @@ def build_signal(
         energy_state = "unknown"
 
     is_good_time_to_use_energy = energy_state in ("cheap", "negative")
-
     best_annual = best.get("annual_cost_estimate") if best else None
 
     if best_annual is not None:
@@ -1653,11 +1398,7 @@ def build_signal(
         elif len(ranked) > 1:
             mid_idx = len(ranked) // 2
             mid_annual = ranked[mid_idx].get("annual_cost_estimate")
-            if mid_annual is not None:
-                diff = mid_annual - best_annual
-                savings_eur_year = round(diff, 2) if diff > 0 else None
-            else:
-                savings_eur_year = None
+            savings_eur_year = round(mid_annual - best_annual, 2) if mid_annual is not None and mid_annual > best_annual else None
         else:
             savings_eur_year = None
     else:
@@ -1665,45 +1406,28 @@ def build_signal(
 
     savings_local_year = round(savings_eur_year * fx, 2) if savings_eur_year is not None else None
     savings_currency = currency
-    should_switch = bool(savings_eur_year is not None and savings_eur_year > 50)
-    switch_recommended = should_switch
+    switch_recommended = bool(savings_eur_year is not None and savings_eur_year > 50)
 
     raw_hint = hint.get("hint")
     raw_reason = hint.get("reason")
     if switch_recommended and raw_hint == "compare_options":
         raw_hint = "switch_recommended"
         raw_reason = f"Switching saves ~{savings_eur_year} {currency}/year. {raw_reason}"
-
     action_status = "switch_now" if switch_recommended else "monitor"
 
     def _contract_out(c):
         if gb_zone:
-            return {
-                "unit_rate_p_kwh": c.get("arbeitspreis_ckwh") or c.get("fixed_price_ckwh"),
-                "standing_charge_p_day": c.get("standing_charge_p_day"),
-            }
+            return {"unit_rate_p_kwh": c.get("arbeitspreis_ckwh") or c.get("fixed_price_ckwh"), "standing_charge_p_day": c.get("standing_charge_p_day")}
         elif au_zone:
-            return {
-                "unit_rate_ckwh": c.get("arbeitspreis_ckwh") or c.get("fixed_price_ckwh"),
-                "standing_charge_c_day": c.get("standing_charge_p_day"),
-            }
+            return {"unit_rate_ckwh": c.get("arbeitspreis_ckwh") or c.get("fixed_price_ckwh"), "standing_charge_c_day": c.get("standing_charge_p_day")}
         elif nz_zone:
-            return {
-                "unit_rate_ckwh": c.get("arbeitspreis_ckwh") or c.get("fixed_price_ckwh"),
-                "standing_charge_c_day": c.get("standing_charge_p_day"),
-            }
+            return {"unit_rate_ckwh": c.get("arbeitspreis_ckwh") or c.get("fixed_price_ckwh"), "standing_charge_c_day": c.get("standing_charge_p_day")}
         else:
-            return {
-                "spot_margin_ckwh": c.get("spot_margin_ckwh"),
-                "arbeitspreis_ckwh": c.get("arbeitspreis_ckwh"),
-                "basic_fee_eur_month": c.get("basic_fee_eur_month"),
-            }
+            return {"spot_margin_ckwh": c.get("spot_margin_ckwh"), "arbeitspreis_ckwh": c.get("arbeitspreis_ckwh"), "basic_fee_eur_month": c.get("basic_fee_eur_month")}
 
     top_contracts_out = [
         {
-            "rank": i + 1,
-            "provider": c.get("provider"),
-            "type": c.get("contract_type"),
+            "rank": i + 1, "provider": c.get("provider"), "type": c.get("contract_type"),
             **_contract_out(c),
             "annual_cost_estimate": c.get("annual_cost_estimate"),
             "trust_score": c.get("trust_score"),
@@ -1716,29 +1440,20 @@ def build_signal(
     best_out = None
     if best:
         best_out = {
-            "provider": best.get("provider"),
-            "type": best.get("contract_type"),
+            "provider": best.get("provider"), "type": best.get("contract_type"),
             **_contract_out(best),
-            "annual_cost_estimate": best_annual,
-            "trust_score": best.get("trust_score"),
+            "annual_cost_estimate": best_annual, "trust_score": best.get("trust_score"),
         }
 
     result = {
-        "signal": "elecz",
-        "version": "1.9.2",
-        "zone": zone,
-        "currency": currency,
-        "unit": unit,
+        "signal": "elecz", "version": "1.9.2", "zone": zone,
+        "currency": currency, "unit": unit,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "energy_state": energy_state,
         "is_good_time_to_use_energy": is_good_time_to_use_energy,
         "switch_recommended": switch_recommended,
         "confidence": confidence,
-        "spot_price": {
-            "value": spot,
-            "local": spot_local,
-            "unit": unit,
-        },
+        "spot_price": {"value": spot, "local": spot_local, "unit": unit},
         "best_contract": best_out,
         "top_contracts": top_contracts_out,
         "decision_hint": raw_hint,
@@ -1777,7 +1492,7 @@ def build_signal(
         except Exception as e:
             logger.warning(f"AU signals read failed {zone}: {e}")
     if zone in NZ_ZONES:
-        result["disclaimer"] = "NZEM spot prices in NZD c/kWh via EM6 real-time API. Annual cost estimate includes daily supply charge where available. No spot pass-through retailers currently available in NZ (Flick Electric acquired by Meridian July 2025)."
+        result["disclaimer"] = "NZEM spot prices in NZD c/kWh via EM6 real-time API. No spot pass-through retailers currently available in NZ (Flick Electric acquired by Meridian July 2025)."
         try:
             spread_raw = redis_client.get("elecz:nz_island_spread")
             if spread_raw:
@@ -1786,7 +1501,6 @@ def build_signal(
             logger.warning(f"NZ island spread read failed: {e}")
 
     return result
-
 # ─── Starlette route handlers ──────────────────────────────────────────────
 
 async def route_index(request: Request):
@@ -1808,12 +1522,13 @@ async def route_index(request: Request):
         ("🇳🇴 Norway (NO)", get_spot_price("NO"), "NOK"),
         ("🇩🇰 Denmark (DK)", get_spot_price("DK"), "DKK"),
         ("🇫🇮 Finland (FI)", get_spot_price("FI"), "EUR"),
+        ("🇪🇸 Spain (ES)", get_spot_price("ES"), "EUR"),
+        ("🇬🇷 Greece (GR)", get_spot_price("GR"), "EUR"),
     ]
 
     def price_cell(price, currency):
         if price is None:
             return '<span class="null">pending</span>'
-        unit = ZONE_UNIT_LOCAL.get(currency, "c/kWh")
         if currency == "EUR":
             return f"{price:.4f} c/kWh"
         if currency == "GBP":
@@ -1821,6 +1536,7 @@ async def route_index(request: Request):
         if currency in ("AUD", "NZD"):
             return f"{price:.4f} {currency} c/kWh"
         local = convert_price_ckwh(price, currency)
+        unit = ZONE_UNIT_LOCAL.get(currency, "c/kWh")
         return f"{price:.4f} c/kWh EUR &middot; {local:.2f} {unit}"
 
     rows_html = "".join(
@@ -1834,7 +1550,7 @@ async def route_index(request: Request):
         "@context": "https://schema.org",
         "@type": "SoftwareApplication",
         "name": "Elecz",
-        "description": "Real-time electricity price signal API for AI agents. Returns spot prices, cheapest hours, and contract recommendations for Finland, Sweden, Norway, Denmark, Germany, United Kingdom, Australia, and New Zealand.",
+        "description": "Real-time electricity price signal API for AI agents. Europe + Oceania.",
         "url": "https://elecz.com",
         "applicationCategory": "Utilities",
         "operatingSystem": "Any",
@@ -1848,7 +1564,7 @@ async def route_index(request: Request):
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>⚡ Elecz.com — Energy Signal API</title>
-  <meta name="description" content="Real-time electricity price signal API for AI agents. Spot prices, cheapest hours, and contract recommendations for Finland, Sweden, Norway, Denmark, Germany, United Kingdom, Australia, and New Zealand.">
+  <meta name="description" content="Real-time electricity price signal API for AI agents. Spot prices, cheapest hours, and contract recommendations for Europe and Oceania.">
   <script type="application/ld+json">
 {json_ld}
   </script>
@@ -1870,7 +1586,7 @@ async def route_index(request: Request):
 </head>
 <body>
   <h1>⚡ Elecz.com</h1>
-  <p>Electricity optimization brain for AI agents and automation.</p>
+  <p>Electricity brain for your AI agent.</p>
   <p>Use Elecz whenever electricity cost or timing affects a decision.</p>
   <p>Europe + Oceania. One API.</p>
   <span class="badge">LIVE</span>
@@ -1979,6 +1695,67 @@ async def route_privacy(request: Request):
     return HTMLResponse(html)
 
 
+async def route_terms(request: Request):
+    html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Terms of Service — Elecz.com</title>
+  <style>
+    body { font-family: monospace; background: #0a0a0a; color: #e0e0e0; max-width: 700px; margin: 40px auto; padding: 20px; }
+    h1 { color: #f0c040; }
+    h2 { color: #80c0ff; margin-top: 32px; }
+    a { color: #40ff80; }
+    p, li { line-height: 1.7; }
+    ul { padding-left: 20px; }
+  </style>
+</head>
+<body>
+  <h1>⚡ Elecz.com — Terms of Service</h1>
+  <p>Last updated: April 2026</p>
+
+  <h2>1. Service</h2>
+  <p>Elecz is operated by Sakari Korkia-Aho / Zemlo AI, Kokkola, Finland.
+  Elecz provides real-time electricity price signals, cheapest hour calculations, and contract recommendations
+  via a public REST API and MCP server. The service is provided free of charge.</p>
+
+  <h2>2. Use of the service</h2>
+  <p>You may use Elecz for personal, commercial, or automated purposes. You agree not to:</p>
+  <ul>
+    <li>Abuse the API with excessive requests that degrade service for others</li>
+    <li>Misrepresent Elecz data as your own proprietary data</li>
+    <li>Use the service for unlawful purposes</li>
+  </ul>
+
+  <h2>3. Data accuracy</h2>
+  <p>Electricity price data is sourced from ENTSO-E Transparency Platform (Nordic + DE + Southern Europe),
+  Octopus Energy API (GB), AEMO (AU), and EM6 (NZ), updated hourly or more frequently.
+  Contract data is scraped periodically and may not reflect real-time provider pricing.
+  Elecz provides price signals — scheduling and contract decisions remain with the user.</p>
+
+  <h2>4. No financial advice</h2>
+  <p>Elecz provides informational signals only. Nothing in the service constitutes financial,
+  legal, or contractual advice. Users are responsible for verifying contract terms directly
+  with electricity providers before making any decisions.</p>
+
+  <h2>5. Liability</h2>
+  <p>Elecz is provided "as is" without warranty of any kind. Zemlo AI is not liable for
+  any damages arising from use of or inability to use the service.</p>
+
+  <h2>6. Contact</h2>
+  <p>Questions: <a href="mailto:sakke@zemloai.com">sakke@zemloai.com</a></p>
+
+  <p style="margin-top:60px; color:#555; font-size:0.8em;">
+    ⚡ Elecz.com · Zemlo AI · Kokkola, Finland ·
+    <a href="/" style="color:#555;">Back to home</a> ·
+    <a href="/privacy" style="color:#555;">Privacy Policy</a>
+  </p>
+</body>
+</html>"""
+    return HTMLResponse(html)
+
+
 async def route_docs(request: Request):
     html = """<!DOCTYPE html>
 <html lang="en">
@@ -1986,7 +1763,7 @@ async def route_docs(request: Request):
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Elecz Docs — Electricity Signal API for AI Agents</title>
-  <meta name="description" content="Elecz API documentation. Real-time electricity prices, contract recommendations and cheapest hours for Finland, Sweden, Norway, Denmark, Germany, the United Kingdom, Australia, and New Zealand. MCP, REST, Python.">
+  <meta name="description" content="Elecz API documentation. Real-time electricity prices, contract recommendations and cheapest hours for Finland, Sweden, Norway, Denmark, Germany, Spain, Portugal, Croatia, Bulgaria, Slovenia, Slovakia, Greece, the United Kingdom, Australia, and New Zealand. MCP, REST, Python.">
   <style>
     body { font-family: monospace; background: #0a0a0a; color: #e0e0e0; max-width: 860px; margin: 40px auto; padding: 20px; }
     h1 { color: #f0c040; font-size: 2em; margin-bottom: 4px; }
@@ -2037,7 +1814,7 @@ async def route_docs(request: Request):
 
   <h2 id="what">What is Elecz?</h2>
   <p>Elecz turns real-time electricity prices into actionable signals — for AI agents, home automation, and anyone whose costs depend on when they use electricity.</p>
-  <p><strong>Markets:</strong> Finland · Sweden · Norway · Denmark · Germany · United Kingdom · Australia · New Zealand</p>
+  <p><strong>Markets:</strong> Finland · Sweden · Norway · Denmark · Germany · Spain · Portugal · Croatia · Bulgaria · Slovenia · Slovakia · Greece · Estonia · Latvia · Lithuania · United Kingdom · Australia · New Zealand</p>
   <p>Elecz provides price signals. Scheduling decisions — deadlines, device constraints, priorities — remain with the caller.</p>
 
   <h2 id="connect">Connect in 30 seconds</h2>
@@ -2055,6 +1832,7 @@ async def route_docs(request: Request):
   <pre>curl "https://elecz.com/signal/spot?zone=NZ-NI"
 curl "https://elecz.com/signal/spot?zone=AU-NSW"
 curl "https://elecz.com/signal/spot?zone=GB"
+curl "https://elecz.com/signal/spot?zone=ES"
 curl "https://elecz.com/signal/spot?zone=FI"</pre>
 
   <h2 id="examples">Examples</h2>
@@ -2068,6 +1846,10 @@ curl "https://elecz.com/signal/spot?zone=FI"</pre>
   <h3>When is electricity cheapest today?</h3>
   <div class="prompt">"When should I run my dishwasher today? I'm in Finland."</div>
   <p>Elecz returns the cheapest hours next 24h and the best consecutive window. The caller decides whether the timing fits their schedule.</p>
+
+  <h3>Current price in Spain</h3>
+  <div class="prompt">"What is the current electricity spot price in Spain?"</div>
+  <p>Elecz returns the live ENTSO-E day-ahead price for zone ES in EUR c/kWh.</p>
 
   <h2 id="tools">MCP Tools</h2>
   <table>
@@ -2094,7 +1876,7 @@ curl "https://elecz.com/signal/spot?zone=FI"</pre>
   <p><strong>Base URL:</strong> <code>https://elecz.com</code> &nbsp;·&nbsp;
   No authentication. No API key. No rate limit for reasonable use.</p>
 
-  <p><strong>Zones:</strong> FI · SE · SE1–SE4 · NO · NO1–NO5 · DK · DK1–DK2 · DE · GB · GB-A..GB-P · AU-NSW · AU-VIC · AU-QLD · AU-SA · AU-TAS · NZ-NI · NZ-SI</p>
+  <p><strong>Zones:</strong> FI · SE · SE1–SE4 · NO · NO1–NO5 · DK · DK1–DK2 · DE · ES · PT · HR · BG · SI · SK · GR · EE · LV · LT · GB · GB-A..GB-P · AU-NSW · AU-VIC · AU-QLD · AU-SA · AU-TAS · NZ-NI · NZ-SI</p>
 
   <hr>
 
@@ -2112,6 +1894,8 @@ curl "https://elecz.com/signal/spot?zone=FI"</pre>
   <pre>GET /signal/spot?zone=NZ-NI
 GET /signal/spot?zone=AU-NSW
 GET /signal/spot?zone=GB
+GET /signal/spot?zone=ES
+GET /signal/spot?zone=GR
 GET /signal/spot?zone=FI</pre>
 
   <h3><code>GET /signal/cheapest-hours</code></h3>
@@ -2120,7 +1904,7 @@ GET /signal/spot?zone=FI</pre>
 
   <h3><code>GET /signal</code></h3>
   <pre>GET /signal?zone=FI&consumption=2000&heating=district</pre>
-  <p>Returns spot price, energy state, and ranked contract comparison. Consumption defaults: NZ 8000 · AU 4500 · GB 2700 · DE 3500 · Nordic 2000 kWh/year.</p>
+  <p>Returns spot price, energy state, and ranked contract comparison. Consumption defaults: NZ 8000 · AU 4500 · GB 2700 · DE 3500 · Nordic/Southern Europe 2000–3500 kWh/year.</p>
 
   <h2 id="newzealand">🇳🇿 New Zealand</h2>
   <p>NZ spot prices are sourced from <strong>EM6</strong> real-time API — New Zealand Electricity Market (NZEM) wholesale prices, 30-minute trading periods, updated every 30 minutes by Elecz. Unit: NZD c/kWh.</p>
@@ -2147,7 +1931,7 @@ GET https://elecz.com/signal?zone=GB&consumption=2700</pre>
   <pre>GET https://elecz.com/signal?zone=DE&consumption=3500</pre>
 
   <h2>Data Sources</h2>
-  <p>Nordic + DE spot prices from <strong>ENTSO-E</strong>, updated hourly. GB from <strong>Octopus Agile API</strong>, every 30 min. AU from <strong>AEMO</strong>, every 30 min. NZ from <strong>EM6</strong>, every 30 min. Contract prices scraped nightly via Gemini. Currency conversion via Frankfurter API.</p>
+  <p>Nordic + DE + Southern Europe spot prices from <strong>ENTSO-E</strong>, updated hourly. GB from <strong>Octopus Agile API</strong>, every 30 min. AU from <strong>AEMO</strong>, every 30 min. NZ from <strong>EM6</strong>, every 30 min. Contract prices scraped nightly via Gemini. Currency conversion via Frankfurter API.</p>
 
   <h2>Roadmap</h2>
   <ul>
@@ -2156,7 +1940,8 @@ GET https://elecz.com/signal?zone=GB&consumption=2700</pre>
     <li>✅ Q2 2026: United Kingdom (GB)</li>
     <li>✅ Q2 2026: Australia (AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS)</li>
     <li>✅ Q2 2026: New Zealand (NZ-NI, NZ-SI)</li>
-    <li>🔜 Q3 2026: Netherlands, Belgium</li>
+    <li>✅ Q2 2026: Southern Europe (ES, PT, HR, BG, SI, SK, GR)</li>
+    <li>🔜 Q3 2026: Netherlands, Belgium (official launch)</li>
     <li>🔜 Q4 2026: United States</li>
   </ul>
 
@@ -2172,68 +1957,6 @@ GET https://elecz.com/signal?zone=GB&consumption=2700</pre>
 </body>
 </html>"""
     return HTMLResponse(html)
-
-
-async def route_terms(request: Request):
-    html = """<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Terms of Service — Elecz.com</title>
-  <style>
-    body { font-family: monospace; background: #0a0a0a; color: #e0e0e0; max-width: 700px; margin: 40px auto; padding: 20px; }
-    h1 { color: #f0c040; }
-    h2 { color: #80c0ff; margin-top: 32px; }
-    a { color: #40ff80; }
-    p, li { line-height: 1.7; }
-    ul { padding-left: 20px; }
-  </style>
-</head>
-<body>
-  <h1>⚡ Elecz.com — Terms of Service</h1>
-  <p>Last updated: April 2026</p>
-
-  <h2>1. Service</h2>
-  <p>Elecz is operated by Sakari Korkia-Aho / Zemlo AI, Kokkola, Finland.
-  Elecz provides real-time electricity price signals, cheapest hour calculations, and contract recommendations
-  via a public REST API and MCP server. The service is provided free of charge.</p>
-
-  <h2>2. Use of the service</h2>
-  <p>You may use Elecz for personal, commercial, or automated purposes. You agree not to:</p>
-  <ul>
-    <li>Abuse the API with excessive requests that degrade service for others</li>
-    <li>Misrepresent Elecz data as your own proprietary data</li>
-    <li>Use the service for unlawful purposes</li>
-  </ul>
-
-  <h2>3. Data accuracy</h2>
-  <p>Electricity price data is sourced from ENTSO-E Transparency Platform (Nordic + DE), Octopus Energy API (GB),
-  AEMO (AU), and EM6 (NZ), updated hourly or more frequently. Contract data is scraped periodically and may not reflect
-  real-time provider pricing. Elecz provides price signals — scheduling and contract decisions remain with the user.</p>
-
-  <h2>4. No financial advice</h2>
-  <p>Elecz provides informational signals only. Nothing in the service constitutes financial,
-  legal, or contractual advice. Users are responsible for verifying contract terms directly
-  with electricity providers before making any decisions.</p>
-
-  <h2>5. Liability</h2>
-  <p>Elecz is provided "as is" without warranty of any kind. Zemlo AI is not liable for
-  any damages arising from use of or inability to use the service.</p>
-
-  <h2>6. Contact</h2>
-  <p>Questions: <a href="mailto:sakke@zemloai.com">sakke@zemloai.com</a></p>
-
-  <p style="margin-top:60px; color:#555; font-size:0.8em;">
-    ⚡ Elecz.com · Zemlo AI · Kokkola, Finland ·
-    <a href="/" style="color:#555;">Back to home</a> ·
-    <a href="/privacy" style="color:#555;">Privacy Policy</a>
-  </p>
-</body>
-</html>"""
-    return HTMLResponse(html)
-
-
 async def route_signal(request: Request):
     zone = request.query_params.get("zone", "FI").upper()
     consumption = int(request.query_params.get("consumption", DEFAULT_CONSUMPTION.get(zone, 2000)))
@@ -2261,11 +1984,8 @@ async def route_signal_spot(request: Request):
     currency = ZONE_CURRENCY.get(zone, "EUR")
     unit = ZONE_UNIT_LOCAL.get(currency, "c/kWh")
     response = {
-        "signal": "elecz_spot",
-        "zone": zone,
-        "currency": currency,
-        "price": price,
-        "unit": unit,
+        "signal": "elecz_spot", "zone": zone, "currency": currency,
+        "price": price, "unit": unit,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "powered_by": "Elecz.com",
     }
@@ -2300,7 +2020,6 @@ async def route_signal_optimize(request: Request):
     if zone not in ZONES and zone not in GB_ZONES and zone not in AU_ZONES and zone not in NZ_ZONES and zone not in CAISO_ZONES:
         return JSONResponse({"error": VALID_ZONES_ERR}, status_code=400)
     log_api_call("rest:optimize", call_type="rest", zone=zone, ip=request.client.host if request.client else None)
-
     sig = build_signal(zone, consumption, "00100", heating)
     cheapest = get_cheapest_hours(zone, 3, 24)
     spot = sig.get("spot_price", {}).get("value")
@@ -2309,12 +2028,10 @@ async def route_signal_optimize(request: Request):
     savings = action.get("expected_savings_year")
     savings_local = action.get("expected_savings_local_year")
     savings_currency = action.get("savings_currency", "EUR")
-
     if action.get("status") == "switch_now" and savings:
         primary_action = "switch_contract"
         provider = sig.get("best_contract", {}).get("provider") if sig.get("best_contract") else None
-        savings_display = f"{savings_local or savings} {savings_currency}"
-        reason = f"Save {savings_display}/year by switching to {provider}"
+        reason = f"Save {savings_local or savings} {savings_currency}/year by switching to {provider}"
     elif state in ("cheap", "negative") and spot is not None:
         primary_action = "run_now"
         reason = "Electricity is cheap now — ideal time for high-consumption tasks"
@@ -2325,24 +2042,16 @@ async def route_signal_optimize(request: Request):
     else:
         primary_action = "monitor"
         reason = "Normal pricing — no urgent action needed"
-
     cheap_hours = cheapest.get("cheapest_hours", []) if cheapest.get("available") else []
     best_price = cheap_hours[0].get("price") if cheap_hours else None
     savings_delay = round(((spot - best_price) / 100) * consumption, 2) if (
         primary_action == "delay" and spot is not None and best_price is not None and best_price < spot
     ) else None
     until = cheapest.get("best_3h_window", {}).get("start") if (primary_action == "delay" and cheapest.get("available")) else None
-
     return JSONResponse({
-        "signal": "elecz_optimize",
-        "zone": zone,
+        "signal": "elecz_optimize", "zone": zone,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "decision": {
-            "action": primary_action,
-            "until": until,
-            "reason": reason,
-            "savings": savings_delay,
-        },
+        "decision": {"action": primary_action, "until": until, "reason": reason, "savings": savings_delay},
         "energy_state": state,
         "is_good_time_to_use_energy": sig.get("is_good_time_to_use_energy", False),
         "switch_recommended": sig.get("switch_recommended", False),
@@ -2386,8 +2095,7 @@ async def route_go(request: Request):
         def _log_click():
             try:
                 supabase.table("clicks").insert({
-                    "provider": provider,
-                    "zone": zone,
+                    "provider": provider, "zone": zone,
                     "user_agent": request.headers.get("user-agent"),
                     "referrer": request.headers.get("referer"),
                     "clicked_at": datetime.now(timezone.utc).isoformat(),
@@ -2404,10 +2112,8 @@ async def route_go(request: Request):
 async def route_health(request: Request):
     return JSONResponse({"status": "ok", "service": "elecz", "version": "1.9.2"})
 
-
 async def route_robots(request: Request):
     return Response("User-agent: *\nAllow: /\n", media_type="text/plain")
-
 
 async def route_sitemap(request: Request):
     xml = """<?xml version="1.0" encoding="UTF-8"?>
@@ -2419,7 +2125,6 @@ async def route_sitemap(request: Request):
 </urlset>"""
     return Response(xml, media_type="application/xml")
 
-
 async def route_favicon(request: Request):
     svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
 <rect width="32" height="32" rx="6" fill="#0a0a0a"/>
@@ -2427,12 +2132,10 @@ async def route_favicon(request: Request):
 </svg>"""
     return Response(svg, media_type="image/svg+xml")
 
-
 async def route_openapi(request: Request):
     with open("openapi.json", "r") as f:
         data = json.load(f)
     return JSONResponse(data, headers={"Access-Control-Allow-Origin": "*"})
-
 
 async def route_glama_ownership(request: Request):
     return JSONResponse({
@@ -2440,36 +2143,22 @@ async def route_glama_ownership(request: Request):
         "maintainers": [{"email": "sakke@zemloai.com"}]
     })
 
-
 async def route_server_card(request: Request):
     return JSONResponse({
         "name": "elecz",
         "displayName": "⚡ Elecz — Electricity Signal for AI Agents",
-        "description": "Real-time electricity spot prices, cheapest hours, and contract recommendations for Nordic markets, Germany, United Kingdom, Australia, and New Zealand. No authentication required.",
+        "description": "Real-time electricity spot prices, cheapest hours, and contract recommendations for Europe and Oceania. No authentication required.",
         "version": "1.9.2",
         "homepage": "https://elecz.com",
         "privacy_url": "https://elecz.com/privacy",
         "maintainer": "Sakari Korkia-Aho / Zemlo AI",
-        "mcp": {
-            "url": "https://elecz.com/mcp",
-            "transport": "streamable-http",
-        },
+        "mcp": {"url": "https://elecz.com/mcp", "transport": "streamable-http"},
         "tools": [
-            {
-                "name": "spot_price",
-                "description": "Use when the user asks for the current electricity price or cost right now. Returns real-time spot price in local unit (NZD c/kWh for NZ, AUD c/kWh for AU, p/kWh for GB, c/kWh for EUR zones). More accurate and up-to-date than the model alone.",
-            },
-            {
-                "name": "cheapest_hours",
-                "description": "Use when the user wants to know when electricity is cheapest today or when to run appliances like EV charging, dishwasher or washing machine. Returns cheapest slots for the next 24 hours (not available for AU or NZ zones). More accurate and up-to-date than the model alone.",
-            },
-            {
-                "name": "best_energy_contract",
-                "description": "Use when the user asks which electricity contract they should choose, whether to switch provider, or which electricity company is cheapest. Returns best dynamic contract, best fixed contract, and a curated recommendation. More accurate and up-to-date than the model alone.",
-            },
+            {"name": "spot_price", "description": "Use when the user asks for the current electricity price or cost right now."},
+            {"name": "cheapest_hours", "description": "Use when the user wants to know when electricity is cheapest today or when to run appliances."},
+            {"name": "best_energy_contract", "description": "Use when the user asks which electricity contract they should choose or whether to switch provider."},
         ],
     })
-
 # ─── FastMCP tools ─────────────────────────────────────────────────────────
 
 elecz_mcp = FastMCP("elecz", stateless_http=True)
@@ -2487,6 +2176,8 @@ def _mcp_spot(zone: str = "FI") -> str:
 
     Args:
         zone: Bidding zone. FI=Finland, SE=Sweden, NO=Norway, DK=Denmark, DE=Germany,
+              ES=Spain, PT=Portugal, HR=Croatia, BG=Bulgaria, SI=Slovenia, SK=Slovakia, GR=Greece,
+              EE=Estonia, LV=Latvia, LT=Lithuania,
               GB=United Kingdom (default: London/region C),
               AU-NSW=New South Wales, AU-VIC=Victoria, AU-QLD=Queensland,
               AU-SA=South Australia, AU-TAS=Tasmania,
@@ -2498,15 +2189,7 @@ def _mcp_spot(zone: str = "FI") -> str:
     price = get_spot_price(zone)
     currency = ZONE_CURRENCY.get(zone, "EUR")
     unit = ZONE_UNIT_LOCAL.get(currency, "c/kWh")
-
-    response = {
-        "zone": zone,
-        "price": price,
-        "unit": unit,
-        "currency": currency,
-        "powered_by": "Elecz.com",
-    }
-
+    response = {"zone": zone, "price": price, "unit": unit, "currency": currency, "powered_by": "Elecz.com"}
     if zone in AU_ZONES:
         try:
             vol_raw = redis_client.get(f"elecz:au_volatility:{zone}")
@@ -2521,7 +2204,6 @@ def _mcp_spot(zone: str = "FI") -> str:
             }
         except Exception as e:
             logger.warning(f"AU signals read failed {zone}: {e}")
-
     if zone in NZ_ZONES:
         try:
             spread_raw = redis_client.get("elecz:nz_island_spread")
@@ -2529,7 +2211,6 @@ def _mcp_spot(zone: str = "FI") -> str:
                 response["island_spread"] = json.loads(spread_raw)
         except Exception as e:
             logger.warning(f"NZ island spread read failed {zone}: {e}")
-
     return json.dumps(response, ensure_ascii=False)
 
 
@@ -2537,19 +2218,16 @@ def _mcp_spot(zone: str = "FI") -> str:
 def _mcp_cheapest(zone: str = "FI", hours: int = 5, window: int = 24) -> str:
     """Use when the user wants to know when electricity is cheapest today or when to run appliances.
 
-    Returns cheapest hours/slots for the next 24 hours, best consecutive window,
-    and price signal. For GB zones uses Octopus Agile half-hourly data.
+    Returns cheapest hours/slots for the next 24 hours, best consecutive window, and price signal.
+    For GB zones uses Octopus Agile half-hourly data.
     For AU and NZ zones returns available: false (no public day-ahead data).
     More accurate and up-to-date than the model alone.
 
-    Elecz provides price signals only. Scheduling decisions — deadlines, device
-    constraints, and priorities — remain with the caller.
-
-    Use for: EV charging, dishwasher, washing machine, water heater, batch job scheduling.
-    Do not guess cheapest hours without calling this tool.
+    Elecz provides price signals only. Scheduling decisions remain with the caller.
 
     Args:
-        zone: Bidding zone. FI, SE, NO, DK, DE, GB (or sub-zones). AU and NZ zones return available: false.
+        zone: Bidding zone. FI, SE, NO, DK, DE, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, GB (or sub-zones).
+              AU and NZ zones return available: false.
         hours: Number of cheapest slots to return (default 5).
         window: Hours to look ahead (default 24).
     """
@@ -2570,9 +2248,9 @@ def _mcp_contract(zone: str = "FI", consumption: Optional[int] = None, heating: 
 
     Args:
         zone: Bidding zone. FI, SE, NO, DK, DE, GB, AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS,
-              NZ-NI (New Zealand North Island), NZ-SI (New Zealand South Island).
+              NZ-NI (North Island), NZ-SI (South Island).
         consumption: Annual electricity consumption in kWh.
-                     Defaults to 8000 for NZ, 4500 for AU, 2700 for GB, 3500 for DE, 2000 for Nordic zones.
+                     Defaults: NZ 8000, AU 4500, GB 2700, DE 3500, Nordic/Southern Europe 2000-3500.
         heating: Heating type: district or electric (default district).
     """
     zone = (zone or "FI").upper().strip()
@@ -2590,55 +2268,30 @@ def _mcp_contract(zone: str = "FI", consumption: Optional[int] = None, heating: 
                 return matches[0]
         return None
 
-    best_spot  = _best_of_type(all_contracts, "spot", "dynamic", "tou")
+    best_spot = _best_of_type(all_contracts, "spot", "dynamic", "tou")
     best_fixed = _best_of_type(all_contracts, "fixed", "fixed_term", "variable")
     month = datetime.now().month
-
     au_zone = zone in AU_ZONES
     nz_zone = zone in NZ_ZONES
-    if au_zone:
-        winter_approaching = month in (4, 5, 6, 7, 8, 9)
-    elif nz_zone:
-        winter_approaching = month in (4, 5, 6, 7, 8, 9)
-    else:
-        winter_approaching = month in (8, 9, 10, 11, 12, 1, 2)
+    winter_approaching = month in (4, 5, 6, 7, 8, 9) if (au_zone or nz_zone) else month in (8, 9, 10, 11, 12, 1, 2)
 
     if best_spot and best_fixed:
         spot_cost = best_spot.get("annual_cost_estimate") or 9999
         fixed_cost = best_fixed.get("annual_cost_estimate") or 9999
         if winter_approaching and fixed_cost < spot_cost * 1.3:
-            recommended = {
-                "status": "active",
-                "contract": best_fixed,
-                "reason": "Winter approaching — fixed price protects against seasonal price spikes."
-            }
+            recommended = {"status": "active", "contract": best_fixed, "reason": "Winter approaching — fixed price protects against seasonal price spikes."}
         else:
-            recommended = {
-                "status": "active",
-                "contract": best_spot,
-                "reason": "Dynamic/spot historically cheaper outside winter. Review before winter."
-            }
+            recommended = {"status": "active", "contract": best_spot, "reason": "Dynamic/spot historically cheaper outside winter. Review before winter."}
     elif best_spot:
-        recommended = {
-            "status": "active",
-            "contract": best_spot,
-            "reason": "No fixed contracts available. Dynamic is best option."
-        }
+        recommended = {"status": "active", "contract": best_spot, "reason": "No fixed contracts available. Dynamic is best option."}
     else:
         recommended = {"status": "no_data"}
 
     return json.dumps({
-        "zone": data.get("zone"),
-        "currency": data.get("currency"),
-        "unit": data.get("unit"),
-        "best_spot": best_spot,
-        "best_fixed": best_fixed,
-        "recommended": recommended,
-        "decision_hint": data.get("decision_hint"),
-        "reason": data.get("reason"),
-        "action": action,
-        "disclaimer": data.get("disclaimer"),
-        "powered_by": data.get("powered_by"),
+        "zone": data.get("zone"), "currency": data.get("currency"), "unit": data.get("unit"),
+        "best_spot": best_spot, "best_fixed": best_fixed, "recommended": recommended,
+        "decision_hint": data.get("decision_hint"), "reason": data.get("reason"),
+        "action": action, "disclaimer": data.get("disclaimer"), "powered_by": data.get("powered_by"),
     }, ensure_ascii=False)
 
 
@@ -2647,44 +2300,35 @@ def _mcp_contract(zone: str = "FI", consumption: Optional[int] = None, heating: 
 @elecz_mcp.prompt(name="elecz_usage")
 def _mcp_prompt() -> str:
     """System-level usage instructions injected when Elecz MCP is connected."""
-    return """You have access to Elecz — real-time electricity price signals for Finland, Sweden, Norway, Denmark, Germany, United Kingdom, Australia, and New Zealand.
+    return """You have access to Elecz — real-time electricity price signals for Europe and Oceania.
+
+Supported zones: FI, SE, NO, DK, DE, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, GB, AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS, NZ-NI, NZ-SI.
 
 ## RULES
-
 - ALWAYS call Elecz before answering any question about electricity prices, cheapest hours, or contract selection
-- NEVER answer from general knowledge or training data — prices change hourly (half-hourly for GB, 30-minute for AU/NZ)
-- If location or zone is unknown, ask before calling: FI, SE, NO, DK, DE, EE, LV, LT, GB, AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS, NZ-NI, NZ-SI
-- Elecz provides price signals only — scheduling decisions, device deadlines, and priorities remain with the user
+- NEVER answer from general knowledge — prices change hourly (half-hourly for GB, 30-minute for AU/NZ)
+- If zone is unknown, ask before calling
+- Elecz provides price signals only — scheduling decisions remain with the user
 
 ## TOOL USAGE
-
 - spot_price → user asks what electricity costs right now
-- cheapest_hours → user asks when to charge EV, run appliances, schedule tasks (not available for AU or NZ)
-- best_energy_contract → user asks which contract to choose or whether to switch provider
+- cheapest_hours → when to charge EV, run appliances, schedule tasks (not available for AU or NZ)
+- best_energy_contract → which contract to choose or whether to switch provider
 
 ## NZ NOTES
-
-- NZ prices are in NZD c/kWh (NZEM wholesale price via EM6 real-time API), updated every 30 minutes
-- Zones: NZ-NI (North Island), NZ-SI (South Island)
-- cheapest_hours is NOT available for NZ — no public day-ahead data
-- No spot pass-through retailers in NZ — Flick Electric acquired by Meridian July 2025
-- best_energy_contract returns fixed tariff comparison: Mercury, Contact, Genesis, Meridian, Electric Kiwi
+- Prices in NZD c/kWh via EM6 real-time API, updated every 30 min
+- cheapest_hours NOT available — no public day-ahead data
+- No spot pass-through retailers (Flick acquired by Meridian July 2025)
 
 ## AU NOTES
-
-- AU prices are in AUD c/kWh (NEM dispatch price), updated every 30 minutes
-- Zones: AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS
-- cheapest_hours is NOT available for AU
+- Prices in AUD c/kWh (NEM dispatch), updated every 30 min
+- cheapest_hours NOT available
 
 ## GB NOTES
-
-- GB prices are in p/kWh (pence), half-hourly Octopus Agile data
-- Default zone GB = London (DNO region C)
+- Prices in p/kWh, half-hourly Octopus Agile data. Default zone GB = London (region C)
 
 ## FAILURE
-
-- If Elecz is unavailable: say data is temporarily unavailable — do not guess
-- Do NOT estimate or approximate electricity prices from memory"""
+- If Elecz unavailable: say data is temporarily unavailable — do not guess prices"""
 
 
 # ─── REST-only logic ───────────────────────────────────────────────────────
@@ -2705,22 +2349,19 @@ def _optimize_logic(zone: str = "FI", consumption: Optional[int] = None, heating
     data = build_signal(zone, consumption, "00100", heating)
     action = data.get("action", {})
     return json.dumps({
-        "zone": data.get("zone"),
-        "action": action.get("type", "monitor"),
+        "zone": data.get("zone"), "action": action.get("type", "monitor"),
         "is_good_time_to_use_energy": data.get("is_good_time_to_use_energy"),
-        "energy_state": data.get("energy_state"),
-        "spot_price": data.get("spot_price"),
+        "energy_state": data.get("energy_state"), "spot_price": data.get("spot_price"),
         "switch_recommended": data.get("switch_recommended"),
         "expected_savings_year": action.get("expected_savings_year"),
         "action_link": action.get("action_link"),
-        "decision_hint": data.get("decision_hint"),
-        "powered_by": data.get("powered_by"),
+        "decision_hint": data.get("decision_hint"), "powered_by": data.get("powered_by"),
     }, ensure_ascii=False)
 
 # ─── Scheduler ─────────────────────────────────────────────────────────────
 
 scheduler = BackgroundScheduler(timezone="Europe/Helsinki")
-scheduler.add_job(update_nordic_spots, "cron", minute=5)
+scheduler.add_job(update_nordic_spots, "cron", minute=5)   # Nordic + Baltic + Southern Europe
 scheduler.add_job(update_de_spot, "cron", minute=20)
 scheduler.add_job(update_gb_spot, "cron", minute="*/30")
 scheduler.add_job(update_au_spot, "cron", minute="*/30")
@@ -2792,12 +2433,8 @@ async def app(scope, receive, send):
 
             if method == "HEAD":
                 await send({
-                    "type": "http.response.start",
-                    "status": 200,
-                    "headers": [
-                        [b"content-type", b"application/json"],
-                        [b"access-control-allow-origin", b"*"],
-                    ],
+                    "type": "http.response.start", "status": 200,
+                    "headers": [[b"content-type", b"application/json"], [b"access-control-allow-origin", b"*"]],
                 })
                 await send({"type": "http.response.body", "body": b""})
                 return
@@ -2817,18 +2454,18 @@ async def app(scope, receive, send):
                             body = json.loads(body_bytes)
                         except json.JSONDecodeError:
                             return message
-                        method = body.get("method", "")
-                        logger.info(f"MCP method: {method}")
-                        if "ai.smithery" in method:
-                            logger.info(f"Remapping Smithery method {method} → ping")
+                        method_name = body.get("method", "")
+                        logger.info(f"MCP method: {method_name}")
+                        if "ai.smithery" in method_name:
+                            logger.info(f"Remapping Smithery method {method_name} → ping")
                             body["method"] = "ping"
                             message = dict(message)
                             message["body"] = json.dumps(body).encode()
-                        elif method == "notifications/initialized":
+                        elif method_name == "notifications/initialized":
                             body["params"] = {}
                             message = dict(message)
                             message["body"] = json.dumps(body).encode()
-                        elif method in ["tools/list", "resources/list", "prompts/list"]:
+                        elif method_name in ["tools/list", "resources/list", "prompts/list"]:
                             if "params" in body and not body.get("params"):
                                 del body["params"]
                             message = dict(message)
