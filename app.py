@@ -1638,7 +1638,7 @@ async def route_index(request: Request):
 
   <p style="color:#333; margin-top:60px; font-size:0.8em;">
     ⚡ Elecz.com — Energy Signal API · Powered by ENTSO-E + Octopus Agile + AEMO + EM6 · Europe + Oceania<br>
-    Maintained by <a href="mailto:sakke@zemloai.com">Sakari Korkia-Aho / Zemlo AI</a> ·
+    Maintained by <a href="mailto:sakke@zemloai.com">SKA-Trading Oy / Zemlo AI</a> ·
     <a href="/docs">Documentation</a> ·
     <a href="/privacy">Privacy Policy</a> ·
     <a href="/terms">Terms of Service</a>
@@ -1669,7 +1669,7 @@ async def route_privacy(request: Request):
   <p>Last updated: March 2026</p>
 
   <h2>Who we are</h2>
-  <p>Elecz is operated by Sakari Korkia-Aho / Zemlo AI, Kokkola, Finland.<br>
+  <p>Elecz is operated by SKA-Trading Oy / Zemlo AI, Kokkola, Finland (Y-tunnus: 1010164-9).<br>
   Contact: <a href="mailto:sakke@zemloai.com">sakke@zemloai.com</a></p>
 
   <h2>What data we collect</h2>
@@ -1706,7 +1706,7 @@ async def route_privacy(request: Request):
   <p>Questions about privacy: <a href="mailto:sakke@zemloai.com">sakke@zemloai.com</a></p>
 
   <p style="margin-top:60px; color:#555; font-size:0.8em;">
-    ⚡ Elecz.com · Zemlo AI · Kokkola, Finland ·
+    ⚡ Elecz.com · SKA-Trading Oy / Zemlo AI · Kokkola, Finland ·
     <a href="/" style="color:#555;">Back to home</a>
   </p>
 </body>
@@ -1735,7 +1735,7 @@ async def route_terms(request: Request):
   <p>Last updated: April 2026</p>
 
   <h2>1. Service</h2>
-  <p>Elecz is operated by Sakari Korkia-Aho / Zemlo AI, Kokkola, Finland.
+  <p>Elecz is operated by SKA-Trading Oy / Zemlo AI, Kokkola, Finland (Y-tunnus: 1010164-9).
   Elecz provides real-time electricity price signals, cheapest hour calculations, and contract recommendations
   via a public REST API and MCP server. The service is provided free of charge.</p>
 
@@ -1759,14 +1759,14 @@ async def route_terms(request: Request):
   with electricity providers before making any decisions.</p>
 
   <h2>5. Liability</h2>
-  <p>Elecz is provided "as is" without warranty of any kind. Zemlo AI is not liable for
+  <p>Elecz is provided "as is" without warranty of any kind. SKA-Trading Oy / Zemlo AI is not liable for
   any damages arising from use of or inability to use the service.</p>
 
   <h2>6. Contact</h2>
   <p>Questions: <a href="mailto:sakke@zemloai.com">sakke@zemloai.com</a></p>
 
   <p style="margin-top:60px; color:#555; font-size:0.8em;">
-    ⚡ Elecz.com · Zemlo AI · Kokkola, Finland ·
+    ⚡ Elecz.com · SKA-Trading Oy / Zemlo AI · Kokkola, Finland ·
     <a href="/" style="color:#555;">Back to home</a> ·
     <a href="/privacy" style="color:#555;">Privacy Policy</a>
   </p>
@@ -1968,7 +1968,7 @@ GET https://elecz.com/signal?zone=GB&consumption=2700</pre>
   <p>Questions, integrations, or issues: <a href="mailto:sakke@zemloai.com">sakke@zemloai.com</a></p>
 
   <p style="margin-top:60px; color:#333; font-size:0.8em;">
-    ⚡ Elecz.com · Zemlo AI · Kokkola, Finland ·
+    ⚡ Elecz.com · SKA-Trading Oy / Zemlo AI · Kokkola, Finland ·
     <a href="/" style="color:#333;">Home</a> ·
     <a href="/privacy" style="color:#333;">Privacy Policy</a>
   </p>
@@ -2170,7 +2170,7 @@ async def route_server_card(request: Request):
         "version": "1.9.2",
         "homepage": "https://elecz.com",
         "privacy_url": "https://elecz.com/privacy",
-        "maintainer": "Sakari Korkia-Aho / Zemlo AI",
+        "maintainer": "SKA-Trading Oy / Zemlo AI",
         "mcp": {"url": "https://elecz.com/mcp", "transport": "streamable-http"},
         "tools": [
             {"name": "spot_price", "description": "Use when the user asks for the current electricity price or cost right now."},
