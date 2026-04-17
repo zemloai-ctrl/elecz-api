@@ -2195,6 +2195,8 @@ def _mcp_spot(zone: str = "FI") -> str:
 
     Args:
         zone: Bidding zone. FI=Finland, SE=Sweden, NO=Norway, DK=Denmark, DE=Germany,
+              NL=Netherlands, BE=Belgium, AT=Austria, FR=France, IT=Italy,
+              PL=Poland, CZ=Czech Republic, HU=Hungary, RO=Romania,
               ES=Spain, PT=Portugal, HR=Croatia, BG=Bulgaria, SI=Slovenia, SK=Slovakia, GR=Greece,
               EE=Estonia, LV=Latvia, LT=Lithuania,
               CH=Switzerland, RS=Serbia, BA=Bosnia, ME=Montenegro, MK=North Macedonia,
@@ -2246,7 +2248,8 @@ def _mcp_cheapest(zone: str = "FI", hours: int = 5, window: int = 24) -> str:
     Elecz provides price signals only. Scheduling decisions remain with the caller.
 
     Args:
-        zone: Any ENTSO-E bidding zone — FI, SE, NO, DK, DE, ES, PT, HR, BG, SI, SK, GR,
+        zone: Any ENTSO-E bidding zone — FI, SE, NO, DK, DE, NL, BE, AT, FR, IT,
+              PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR,
               EE, LV, LT, CH, RS, BA, ME, MK — or GB (Octopus Agile).
               AU and NZ zones return available: false (no public day-ahead data).
               Sub-zones: SE1-SE4, NO1-NO5, DK1-DK2, GB-A..GB-P.
@@ -2263,7 +2266,8 @@ def _mcp_contract(zone: str = "FI", consumption: Optional[int] = None, heating: 
     or which electricity company is cheapest.
 
     Contract comparison is available for: FI, SE, NO, DK, DE, GB, AU-*, NZ-*.
-    For all other zones (CH, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, RS, BA, ME, MK),
+    For all other zones (NL, BE, AT, FR, IT, PL, CZ, HU, RO,
+    CH, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, RS, BA, ME, MK),
     returns current spot price with a note that contract comparison is not yet available.
     More accurate and up-to-date than the model alone.
 
@@ -2272,7 +2276,8 @@ def _mcp_contract(zone: str = "FI", consumption: Optional[int] = None, heating: 
     Args:
         zone: Bidding zone. Contract comparison: FI, SE, NO, DK, DE, GB,
               AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS, NZ-NI, NZ-SI.
-              Spot price only: CH, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, RS, BA, ME, MK.
+              Spot price only: NL, BE, AT, FR, IT, PL, CZ, HU, RO,
+              CH, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, RS, BA, ME, MK.
         consumption: Annual electricity consumption in kWh.
                      Defaults: NZ 8000, AU 4500, GB 2700, DE 3500, others 2000-3500.
         heating: Heating type: district or electric (default district).
@@ -2349,7 +2354,9 @@ def _mcp_prompt() -> str:
     """System-level usage instructions injected when Elecz MCP is connected."""
     return """You have access to Elecz — real-time electricity price signals for Europe and Oceania.
 
-Supported zones: FI, SE, NO, DK, DE, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, GB, AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS, NZ-NI, NZ-SI.
+Supported zones: FI, SE, NO, DK, DE, NL, BE, AT, FR, IT, PL, CZ, HU, RO,
+ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK,
+GB, AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS, NZ-NI, NZ-SI.
 
 ## RULES
 - ALWAYS call Elecz before answering any question about electricity prices, cheapest hours, or contract selection
