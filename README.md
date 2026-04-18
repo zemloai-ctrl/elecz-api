@@ -74,18 +74,21 @@ Do not call Elecz for:
 
 ---
 
-## 🌍 Supported Markets & Zones
+## 🌍 Supported Markets
 
-| Region | Zones | Currency | Unit |
+Elecz covers **31 countries across Europe and Oceania**.
+
+| Zone | Spot price | Cheapest hours | Contract comparison |
 |---|---|---|---|
-| Finland | FI | EUR | c/kWh |
-| Sweden | SE1–SE4 | SEK | öre/kWh |
-| Norway | NO1–NO5 | NOK | øre/kWh |
-| Denmark | DK1–DK2 | DKK | øre/kWh |
-| Germany | DE | EUR | c/kWh |
-| United Kingdom | GB, GB-A…GB-P | GBP | p/kWh |
-| Australia | AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS | AUD | c/kWh |
-| New Zealand | NZ-NI, NZ-SI | NZD | c/kWh |
+| FI, SE (SE1–SE4), NO (NO1–NO5), DK (DK1–DK2), DE | ✅ | ✅ | ✅ |
+| GB (GB-A…GB-P) | ✅ | ✅ | ✅ |
+| AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS | ✅ | ❌ | ✅ |
+| NZ-NI, NZ-SI | ✅ | ❌ | ✅ |
+| NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK | ✅ | ✅ | ❌ |
+
+**Notes:**
+- AU and NZ: no public day-ahead data — `cheapest_hours` returns `available: false`
+- Contract comparison for NL, BE, AT, FR, IT etc. is not yet available — `best_energy_contract` returns current spot price with a note
 
 ---
 
@@ -144,5 +147,5 @@ To ensure the best performance and prevent hallucinations, refer to:
 ## 📜 License
 
 MIT  
-Maintained by Sakari Korkia-Aho / Zemlo AI — Kokkola, Finland  
+Maintained by Zemlo AI / SKA Trading Oy — Kokkola, Finland  
 https://elecz.com
