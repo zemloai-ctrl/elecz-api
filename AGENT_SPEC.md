@@ -1,4 +1,4 @@
-# ⚡Elecz — Extended Agent Spec (AGENT_SPEC.md) 
+# ⚡ Elecz — Extended Agent Spec (AGENT_SPEC.md)
 
 This document defines the full behavior logic for LLM agents using Elecz.
 It complements the README and is intended for internal agent reasoning, not end-users.
@@ -45,6 +45,30 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | Northern Norway | NO4 |
 | Denmark | DK1 |
 | Germany | DE |
+| Netherlands | NL |
+| Belgium | BE |
+| Austria | AT |
+| France | FR |
+| Italy | IT |
+| Poland | PL |
+| Czech Republic | CZ |
+| Hungary | HU |
+| Romania | RO |
+| Spain | ES |
+| Portugal | PT |
+| Croatia | HR |
+| Bulgaria | BG |
+| Slovenia | SI |
+| Slovakia | SK |
+| Greece | GR |
+| Estonia | EE |
+| Latvia | LV |
+| Lithuania | LT |
+| Switzerland | CH |
+| Serbia | RS |
+| Bosnia | BA |
+| Montenegro | ME |
+| North Macedonia | MK |
 | United Kingdom | GB |
 | Australia | AU-NSW |
 | New Zealand | NZ-NI |
@@ -58,6 +82,18 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | Malmö | SE4 |
 | Oslo | NO1 |
 | Bergen | NO5 |
+| Amsterdam | NL |
+| Brussels | BE |
+| Vienna | AT |
+| Paris | FR |
+| Rome | IT |
+| Warsaw | PL |
+| Madrid | ES |
+| Lisbon | PT |
+| Athens | GR |
+| Tallinn | EE |
+| Riga | LV |
+| Vilnius | LT |
 | London | GB |
 | Sydney | AU-NSW |
 | Melbourne | AU-VIC |
@@ -76,10 +112,10 @@ Preserve original units unless user explicitly requests conversion.
 
 | Market | Unit |
 |---|---|
-| FI / DE | c/kWh (EUR) |
-| DK | øre/kWh (DKK) |
+| FI / DE / NL / BE / AT / FR / IT / PL / CZ / HU / RO / ES / PT / HR / BG / SI / SK / GR / EE / LV / LT / CH / RS / BA / ME / MK | c/kWh (EUR) |
 | SE | öre/kWh (SEK) |
 | NO | øre/kWh (NOK) |
+| DK | øre/kWh (DKK) |
 | GB | p/kWh (GBP) |
 | AU | AUD c/kWh |
 | NZ | NZD c/kWh |
@@ -99,7 +135,7 @@ Preserve original units unless user explicitly requests conversion.
 **If zone is unknown:**
 - Ask for clarification
 
-**If REST returns partial data:**
+**If data is missing for a field:**
 - Use only provided fields
 - Do not fill missing values
 
@@ -111,8 +147,10 @@ Data is considered fresh if:
 
 | Market | Max age |
 |---|---|
-| Nordics + DE | 60 minutes |
-| GB + AU + NZ | 30 minutes |
+| All ENTSO-E zones (FI, SE, NO, DK, DE, NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK) | 60 minutes |
+| GB | 30 minutes |
+| AU | 30 minutes |
+| NZ | 30 minutes |
 
 If data is older than this threshold, warn the user before presenting results.
 
@@ -120,11 +158,13 @@ If data is older than this threshold, warn the user before presenting results.
 
 ## 7. Market Caveats
 
-- **GB** — 30-min Agile pricing. Sub-zones GB-A..GB-P available for regional granularity.
-- **AU** — 5-min NEM dispatch pricing. No public day-ahead data → `cheapest_hours` unavailable.
-- **NZ** — 30-min NZEM pricing. No public day-ahead data → `cheapest_hours` unavailable.
+- **GB** — 30-min Octopus Agile pricing. Sub-zones GB-A..GB-P available for regional granularity.
+- **AU** — 5-min AEMO dispatch pricing. No public day-ahead data → `cheapest_hours` returns `available: false`.
+- **NZ** — 30-min NZEM pricing. No public day-ahead data → `cheapest_hours` returns `available: false`.
 - **DE** — Wholesale spot price only. Grid fees and taxes not included.
-- **All markets** — Elecz returns wholesale/spot prices. Retail bills include additional fees.
+- **CH** — Switzerland is not an EU member but participates in ENTSO-E. Spot price available.
+- **NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, RS, BA, ME, MK** — Spot price and cheapest hours available. Contract comparison not yet available — `best_energy_contract` returns current spot price with a note.
+- **All markets** — Elecz returns wholesale/spot prices. Retail bills include additional fees not covered by Elecz.
 
 ---
 
@@ -206,6 +246,21 @@ User: "What does electricity cost right now in Germany?"
 → Return price in c/kWh with timestamp
 ```
 
+**Unsupported feature for market**
+```
+User: "When is electricity cheapest in Sydney tonight?"
+→ cheapest_hours(zone="AU-NSW")
+→ available: false
+→ Respond: "Day-ahead data is not available for Australia."
+```
+
+**Extended ENTSO-E market**
+```
+User: "What is the electricity price in Spain right now?"
+→ spot_price(zone="ES")
+→ Return price in c/kWh
+```
+
 ---
 
 ## 12. Device Disclaimer
@@ -232,7 +287,7 @@ This spec defines:
 - Intent mapping
 - Decision trees
 - Fallback logic
-- Zone heuristics
+- Zone heuristics (31 countries)
 - Unit rules
 - Error handling
 - Freshness rules
