@@ -1,6 +1,6 @@
 name: elecz
-displayName: "Elecz — Real-Time Electricity Signal"
-description: "Real-time electricity spot prices, cheapest hours, and contract comparison for AI agents. 8 markets, 2 continents: Finland, Sweden, Norway, Denmark, Germany, UK, Australia, New Zealand. No authentication."
+displayName: "Elecz — Real-Time Electricity Price Signal"
+description: "Real-time electricity spot prices, cheapest hours, and contract comparison for AI agents. 31 countries across Europe and Oceania. No authentication."
 version: "1.9.2"
 license: MIT
 homepage: https://elecz.com
@@ -12,7 +12,7 @@ tools:
   - name: spot_price
     description: "Get current real-time electricity spot price for a market zone. Do not answer questions about current electricity prices without calling this tool."
   - name: cheapest_hours
-    description: "Get cheapest electricity hours in the next 24h. Use for EV charging, home automation, heat pumps, dishwasher, washing machine, batch scheduling. AU and NZ return available: false."
+    description: "Get cheapest electricity hours in the next 24h with current-hour context signals: is now cheap, hours until next cheap slot, when the cheap window ends. Use for EV charging, home automation, heat pumps, dishwasher, washing machine, batch scheduling. AU and NZ return available: false."
   - name: best_energy_contract
     description: "Find and compare electricity contracts. Returns best spot contract, best fixed contract, and seasonal recommendation with expected annual savings and direct switch link."
 categories:
@@ -31,6 +31,7 @@ tags:
   - uk
   - australia
   - new-zealand
+  - europe
   - home-automation
   - ev-charging
   - energy-optimization
@@ -58,3 +59,12 @@ examples:
     input:
       zone: "DE"
       consumption: 3500
+  - prompt: "What is the electricity price in Spain right now?"
+    tool: spot_price
+    input:
+      zone: "ES"
+  - prompt: "When is electricity cheapest in Greece today?"
+    tool: cheapest_hours
+    input:
+      zone: "GR"
+      hours: 5
