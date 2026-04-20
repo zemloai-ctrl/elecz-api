@@ -1,4 +1,4 @@
-# ⚡ Elecz — Real-Time Electricity Signal
+# ⚡ Elecz — Real-Time Electricity Price Signal
 
 ## Purpose
 Elecz provides real-time electricity intelligence for AI agents and developers.
