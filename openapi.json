@@ -1,7 +1,7 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Elecz Energy Signal API",
+    "title": "Elecz Electricity Price Signal API",
     "version": "1.9.2",
     "description": "Real-time electricity spot prices, cheapest hours, and contract comparison for 31 countries across Europe and Oceania. No authentication required.",
     "contact": {
