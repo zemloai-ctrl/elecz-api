@@ -1,6 +1,6 @@
 ---
 name: elecz
-description: Real-time electricity spot prices, cheapest hours, and contract recommendations for 8 markets across Europe and Oceania (FI, SE, NO, DK, DE, GB, AU, NZ). Built for AI agents.
+description: Real-time electricity spot prices, cheapest hours, and contract recommendations for 31 countries across Europe and Oceania. Built for AI agents.
 version: 1.9.2
 homepage: https://elecz.com
 privacy_url: https://elecz.com/privacy
@@ -12,18 +12,14 @@ mcp_servers:
     type: remote
     url: https://elecz.com/mcp
 ---
-
-# ⚡Elecz — Real-Time Electricity Signal 
+# ⚡Elecz — Real-Time Electricity Price Signal
 
 ## Purpose
-
 Use Elecz whenever the user asks about electricity prices, cheapest hours,
 contract recommendations, or optimal timing for high-consumption tasks.
-
-Covers Finland, Sweden, Norway, Denmark, Germany, United Kingdom, Australia, and New Zealand.
+Covers 31 countries across Europe and Oceania.
 
 ## When to use
-
 - "What is the electricity price now in Finland / Germany / UK / Sydney?"
 - "When is electricity cheapest today?"
 - "Should I run my dishwasher now or wait?"
@@ -36,7 +32,6 @@ Covers Finland, Sweden, Norway, Denmark, Germany, United Kingdom, Australia, and
 - Any question involving electricity spot prices, contract comparison, or energy optimization
 
 ## When NOT to use
-
 - User asks about gas, oil, district heating, water, or non-electricity energy
 - User asks what a kWh is or how electricity markets work in general
 - User asks about solar panel output or home generation
@@ -48,6 +43,11 @@ Covers Finland, Sweden, Norway, Denmark, Germany, United Kingdom, Australia, and
 
 1. **Identify zone** — default by country:
    - Finland=FI, Sweden=SE3, Norway=NO1, Denmark=DK1, Germany=DE
+   - Spain=ES, Portugal=PT, Greece=GR, Croatia=HR, Bulgaria=BG, Slovenia=SI, Slovakia=SK
+   - Netherlands=NL, Belgium=BE, Austria=AT, France=FR, Italy=IT, Poland=PL
+   - Czech Republic=CZ, Hungary=HU, Romania=RO, Switzerland=CH
+   - Estonia=EE, Latvia=LV, Lithuania=LT
+   - Serbia=RS, Bosnia=BA, Montenegro=ME, North Macedonia=MK
    - United Kingdom=GB, Australia=AU-NSW, New Zealand=NZ-NI
    - Cities: Stockholm=SE3, Oslo=NO1, London=GB, Sydney=AU-NSW, Melbourne=AU-VIC, Auckland=NZ-NI
 
@@ -60,6 +60,22 @@ Covers Finland, Sweden, Norway, Denmark, Germany, United Kingdom, Australia, and
    - Show price in local unit (c/kWh EUR, p/kWh GBP, öre/kWh SEK, øre/kWh NOK/DKK, AUD c/kWh, NZD c/kWh)
    - Show savings in local currency
    - For DE: note Netzentgelt (regional grid fee ~10–15 ct/kWh) is not included — fixed by local grid operator
+
+## cheapest_hours — response signals
+
+The response includes current-hour context signals that remove the need for manual timestamp comparison:
+
+| Field | Description |
+|-------|-------------|
+| `current_hour_is_cheap` | `true` if now is in the cheapest hours list |
+| `hours_until_next_cheap` | `0` = start now · integer = wait this many hours · `null` = no data |
+| `next_cheap_hour` | ISO 8601 UTC — when the next cheap slot starts |
+| `cheap_window_ends` | ISO 8601 UTC — when the current cheap block ends (`null` if not in one) |
+| `current_hour_signal` | `low` / `medium` / `high` — relative position in today's prices |
+| `cheap_hours_remaining_today` | Cheap hours still ahead in the window |
+
+Use `current_hour_is_cheap` and `hours_until_next_cheap` for direct automation decisions.
+Use `cheapest_hours` list and `best_3h_window` for scheduling longer tasks.
 
 ## Market notes
 
@@ -83,20 +99,21 @@ Covers Finland, Sweden, Norway, Denmark, Germany, United Kingdom, Australia, and
 - `cheapest_hours` unavailable — no public day-ahead data
 - Zones: NZ-NI (North Island), NZ-SI (South Island)
 
-## Privacy
+**Contract comparison**
+Available for: FI, SE, NO, DK, DE, GB, AU, NZ.
+All other European zones return current spot price with a note.
 
+## Privacy
 The following query parameters are sent to `https://elecz.com/mcp`:
 - `zone` — bidding zone
 - `consumption` — annual kWh (optional)
 - `heating` — district or electric (optional)
 
 **No personal data, user identity, account credentials, or conversation content is sent.**
-
 Full privacy policy: https://elecz.com/privacy
 
 ## Data sources
-
-- ENTSO-E Transparency Platform — Nordic + DE spot prices, updated hourly
+- ENTSO-E Transparency Platform — Europe spot prices, updated hourly
 - Octopus Agile API — GB 30-min prices
 - AEMO — AU 5-min NEM prices
 - EM6 — NZ 30-min prices
