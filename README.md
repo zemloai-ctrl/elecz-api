@@ -1,4 +1,4 @@
-# ⚡ Elecz — Real-Time Electricity Signals for AI Agents
+# ⚡ Elecz — Real-Time Electricity Price Signals for AI Agents
 
 [![MCP Badge](https://lobehub.com/badge/mcp/zemloai-ctrl-elecz-api)](https://lobehub.com/mcp/zemloai-ctrl-elecz-api)
 
