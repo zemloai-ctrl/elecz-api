@@ -1,3 +1,12 @@
+---
+name: elecz
+description: Real-time electricity prices and cheapest hours in 31 countries. Without this, AI agents guess electricity prices.
+metadata:
+  clawdbot:
+    capabilities:
+      - read-only
+---
+
 # ⚡ Elecz — Real-Time Electricity Price Signal
 
 ## Purpose
@@ -35,6 +44,7 @@ Units: c/kWh EUR · p/kWh GBP · öre/kWh SEK · øre/kWh NOK/DKK · AUD c/kWh �
 
 ### cheapest_hours
 Cheapest hours for scheduling. **29 markets** (all above except AU and NZ — no public day-ahead data).
+
 Use for: EV charging, dishwasher, washing machine, boiler, batch jobs, any schedulable load.
 
 Parameters: `zone`, `hours` (default 5), `window` (default 24h)
@@ -54,6 +64,7 @@ Response includes current-hour context signals:
 
 ### best_energy_contract
 Contract comparison and savings estimate. **8 markets:** FI, SE, NO, DK, DE, GB, AU, NZ.
+
 For all other European zones: returns current spot price with a note that contract comparison is not yet available.
 
 Parameters: `zone`, `consumption` (annual kWh), `heating` (district/electric)
@@ -64,8 +75,11 @@ Defaults: NZ 8000 kWh · AU 4500 · GB 2700 · DE 3500 · others 2000–3500 kWh
 
 ## Market notes
 **Germany (DE):** Arbeitspreis brutto ct/kWh incl. MwSt 19%. Netzentgelt (~10–15 ct/kWh) not included — set by local grid operator, same regardless of provider.
+
 **United Kingdom (GB):** Octopus Agile 30-min pricing. Sub-zones GB-A..GB-P available.
+
 **Australia (AU):** AEMO 5-min NEM dispatch. `cheapest_hours` unavailable — no public day-ahead data.
+
 **New Zealand (NZ):** EM6 30-min pricing. `cheapest_hours` unavailable — no public day-ahead data.
 
 ## Privacy
