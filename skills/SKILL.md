@@ -1,17 +1,20 @@
 ---
 name: elecz
-description: Real-time electricity spot prices, cheapest hours, and contract recommendations for 31 countries across Europe and Oceania. Built for AI agents.
+description: Real-time electricity prices and cheapest hours in 31 countries. Without this, AI agents guess electricity prices.
 version: 1.9.2
 homepage: https://elecz.com
 privacy_url: https://elecz.com/privacy
 maintainer: Sakari Korkia-Aho / Zemlo AI
 openclaw:
   emoji: "⚡"
+  capabilities:
+    - read-only
 mcp_servers:
   - name: elecz
     type: remote
     url: https://elecz.com/mcp
 ---
+
 # ⚡Elecz — Real-Time Electricity Price Signal
 
 ## Purpose
@@ -63,8 +66,6 @@ Covers 31 countries across Europe and Oceania.
 
 ## cheapest_hours — response signals
 
-The response includes current-hour context signals that remove the need for manual timestamp comparison:
-
 | Field | Description |
 |-------|-------------|
 | `current_hour_is_cheap` | `true` if now is in the cheapest hours list |
@@ -79,41 +80,26 @@ Use `cheapest_hours` list and `best_3h_window` for scheduling longer tasks.
 
 ## Market notes
 
-**Germany (DE)**
-- Default consumption: 3500 kWh/year
-- Prices are Arbeitspreis brutto ct/kWh including MwSt (19%)
-- Netzentgelt not included — same regardless of provider choice
+**Germany (DE):** Arbeitspreis brutto ct/kWh incl. MwSt 19%. Netzentgelt not included.
 
-**United Kingdom (GB)**
-- 30-min Agile pricing via Octopus
-- Unit: p/kWh (pence)
-- Sub-zones GB-A..GB-P available
+**United Kingdom (GB):** Octopus Agile 30-min pricing. Sub-zones GB-A..GB-P available.
 
-**Australia (AU)**
-- 5-min NEM dispatch pricing
-- `cheapest_hours` unavailable — no public day-ahead data
-- Zones: AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS
+**Australia (AU):** AEMO 5-min NEM dispatch. `cheapest_hours` unavailable — no public day-ahead data.
+Zones: AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS
 
-**New Zealand (NZ)**
-- 30-min NZEM pricing
-- `cheapest_hours` unavailable — no public day-ahead data
-- Zones: NZ-NI (North Island), NZ-SI (South Island)
+**New Zealand (NZ):** EM6 30-min pricing. `cheapest_hours` unavailable — no public day-ahead data.
+Zones: NZ-NI (North Island), NZ-SI (South Island)
 
-**Contract comparison**
-Available for: FI, SE, NO, DK, DE, GB, AU, NZ.
+**Contract comparison:** Available for FI, SE, NO, DK, DE, GB, AU, NZ.
 All other European zones return current spot price with a note.
 
 ## Privacy
-The following query parameters are sent to `https://elecz.com/mcp`:
-- `zone` — bidding zone
-- `consumption` — annual kWh (optional)
-- `heating` — district or electric (optional)
-
-**No personal data, user identity, account credentials, or conversation content is sent.**
-Full privacy policy: https://elecz.com/privacy
+Sent to `https://elecz.com/mcp`: `zone`, `consumption` (optional), `heating` (optional).
+No personal data, credentials, or conversation content is transmitted.
+Privacy policy: https://elecz.com/privacy
 
 ## Data sources
-- ENTSO-E Transparency Platform — Europe spot prices, updated hourly
+- ENTSO-E — Europe spot prices, updated hourly
 - Octopus Agile API — GB 30-min prices
 - AEMO — AU 5-min NEM prices
 - EM6 — NZ 30-min prices
