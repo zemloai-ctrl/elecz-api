@@ -1,6 +1,6 @@
 ---
 name: elecz
-description: Real-time electricity prices and cheapest hours in 32 countries. Without this, AI agents guess electricity prices. Provides three MCP tools: spot_price, cheapest_hours, best_energy_contract.
+description: "Real-time electricity prices and cheapest hours in 32 countries. Without this, AI agents guess electricity prices. Provides three MCP tools: spot_price, cheapest_hours, best_energy_contract."
 categories:
   - Energy
   - Utilities
