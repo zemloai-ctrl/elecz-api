@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.zemloai-ctrl/elecz",
-  "title": "Elecz Electricity Price Signal",
-  "description": "Electricity spot prices and cheapest hours for AI agents. 31 countries across Europe and Oceania.",
+  "title": "Elecz Electricity Price Signal API",
+  "description": "Real-time electricity spot prices, cheapest hours, and contract comparison for AI agents. 32 countries across Europe and Oceania.",
   "repository": {
     "url": "https://github.com/zemloai-ctrl/elecz-api",
     "source": "github"
