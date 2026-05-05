@@ -73,10 +73,15 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | Bosnia | BA |
 | Montenegro | ME |
 | North Macedonia | MK |
-| Kosovo | XK |
 | United Kingdom | GB |
 | Australia | AU-NSW |
 | New Zealand | NZ-NI |
+| California (NorCal / PG&E) | US-CA-NP15 |
+| California (SoCal / SCE+SDG&E) | US-CA-SP15 |
+| Texas | US-TX-HB_HUBAVG |
+| New York City | US-NY-NYC |
+| New York State | US-NY-CENTRL |
+| Ontario | CA-ON |
 
 **Cities → Zones**
 
@@ -108,6 +113,14 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | Auckland | NZ-NI |
 | Wellington | NZ-NI |
 | Christchurch | NZ-SI |
+| San Francisco | US-CA-NP15 |
+| Los Angeles | US-CA-SP15 |
+| San Diego | US-CA-SP15 |
+| Dallas | US-TX-HB_NORTH |
+| Houston | US-TX-HB_HOUSTON |
+| New York City | US-NY-NYC |
+| Toronto | CA-ON |
+| Ottawa | CA-ON |
 
 ---
 
@@ -117,13 +130,15 @@ Preserve original units unless user explicitly requests conversion.
 
 | Market | Unit |
 |---|---|
-| FI / DE / NL / BE / AT / FR / IT / PL / CZ / HU / RO / ES / PT / HR / BG / SI / SK / GR / EE / LV / LT / CH / RS / BA / ME / MK / XK | c/kWh (EUR) |
+| FI / DE / NL / BE / AT / FR / IT / PL / CZ / HU / RO / ES / PT / HR / BG / SI / SK / GR / EE / LV / LT / CH / RS / BA / ME / MK | c/kWh (EUR) |
 | SE | öre/kWh (SEK) |
 | NO | øre/kWh (NOK) |
 | DK | øre/kWh (DKK) |
 | GB | p/kWh (GBP) |
 | AU | AUD c/kWh |
 | NZ | NZD c/kWh |
+| US (all zones) | USD c/kWh |
+| CA-ON | CAD c/kWh |
 
 ---
 
@@ -152,10 +167,14 @@ Data is considered fresh if:
 
 | Market | Max age |
 |---|---|
-| All ENTSO-E zones (FI, SE, NO, DK, DE, NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK, XK) | 60 minutes |
+| All ENTSO-E zones (FI, SE, NO, DK, DE, NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK) | 60 minutes |
 | GB | 30 minutes |
 | AU | 30 minutes |
 | NZ | 30 minutes |
+| ERCOT (US-TX-*) | 15 minutes |
+| NYISO (US-NY-*) | 5 minutes |
+| IESO (CA-ON) | 5 minutes |
+| CAISO (US-CA-*) | 60 minutes (DAM, updated daily) |
 
 If data is older than this threshold, warn the user before presenting results.
 
@@ -168,7 +187,11 @@ If data is older than this threshold, warn the user before presenting results.
 - **NZ** — 30-min NZEM pricing. No public day-ahead data → `cheapest_hours` returns `available: false`.
 - **DE** — Wholesale spot price only. Grid fees and taxes not included.
 - **CH** — Switzerland is not an EU member but participates in ENTSO-E. Spot price available.
-- **NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, RS, BA, ME, MK, XK** — Spot price and cheapest hours available. Contract comparison not yet available — `best_energy_contract` returns current spot price with a note.
+- **NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, RS, BA, ME, MK** — Spot price and cheapest hours available. Contract comparison not yet available — `best_energy_contract` returns current spot price with a note.
+- **US-CA (CAISO)** — Day-ahead market (DAM), updated daily after 22:00 UTC. Wholesale prices only. `cheapest_hours` available (DAM hourly data). No contract comparison.
+- **US-TX (ERCOT)** — Real-time 15-min data from public CDR. HB_WEST is the wind zone — prices can go negative. `cheapest_hours` uses DAM data (updated 18:30 UTC daily). No contract comparison.
+- **US-NY (NYISO)** — Real-time 5-min data. `cheapest_hours` uses DAM data (updated 17:00 UTC daily). No contract comparison.
+- **CA-ON (IESO)** — Real-time 5-min Ontario Zonal Price in CAD. `cheapest_hours` uses DAM data (updated 19:00 UTC daily). No contract comparison.
 - **All markets** — Elecz returns wholesale/spot prices. Retail bills include additional fees not covered by Elecz.
 
 ---
@@ -180,7 +203,7 @@ If data is older than this threshold, warn the user before presenting results.
 2. `recommended.reason` — why it is recommended
 3. `decision_hint` — e.g. `spot_recommended`
 4. `action.type` — e.g. `monitor`, `switch`
-5. `action.expected_savings_year` — annual savings in local currency
+5. `action.expected_savings_local_year` — annual savings in local currency
 6. `action.action_link` — direct affiliate link (use this for switching)
 
 **`cheapest_hours` — prioritize:**
@@ -206,7 +229,7 @@ If data is older than this threshold, warn the user before presenting results.
 **`spot_price` — prioritize:**
 1. `price` — current price as a number
 2. `unit` — e.g. `c/kWh`, `p/kWh`, `ore/kWh`
-3. `currency` — e.g. `EUR`, `GBP`, `AUD`
+3. `currency` — e.g. `EUR`, `GBP`, `AUD`, `USD`, `CAD`
 
 ---
 
@@ -283,6 +306,13 @@ User: "When is electricity cheapest in Sydney tonight?"
 → Respond: "Day-ahead data is not available for Australia."
 ```
 
+**US market**
+```
+User: "What is the electricity price in Texas right now?"
+→ spot_price(zone="US-TX-HB_HUBAVG")
+→ Return price in USD c/kWh with disclaimer about wholesale pricing
+```
+
 **Extended ENTSO-E market**
 ```
 User: "What is the electricity price in Spain right now?"
@@ -316,7 +346,7 @@ This spec defines:
 - Intent mapping
 - Decision trees
 - Fallback logic
-- Zone heuristics (32 countries)
+- Zone heuristics (36 countries and regions)
 - Unit rules
 - Error handling
 - Freshness rules
