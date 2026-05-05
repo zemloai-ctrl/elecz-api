@@ -81,7 +81,7 @@ Do not call Elecz for:
 
 ## 🌍 Supported Markets
 
-Elecz covers **32 countries across Europe and Oceania**.
+Elecz covers **36 countries and regions across Europe, Oceania, and North America**.
 
 | Zone | Spot price | Cheapest hours | Contract comparison |
 |---|---|---|---|
@@ -89,11 +89,20 @@ Elecz covers **32 countries across Europe and Oceania**.
 | GB (GB-A…GB-P) | ✅ | ✅ | ✅ |
 | AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS | ✅ | ❌ | ✅ |
 | NZ-NI, NZ-SI | ✅ | ❌ | ✅ |
-| NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK, XK | ✅ | ✅ | ❌ |
+| NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK | ✅ | ✅ | ❌ |
+| US-CA-NP15, US-CA-SP15, US-CA-ZP26 (California/CAISO) | ✅ | ✅ | ❌ |
+| US-TX-HB_NORTH, US-TX-HB_HOUSTON, US-TX-HB_SOUTH, US-TX-HB_WEST, US-TX-HB_HUBAVG, US-TX-LZ_NORTH, US-TX-LZ_HOUSTON, US-TX-LZ_SOUTH, US-TX-LZ_WEST (Texas/ERCOT) | ✅ | ✅ | ❌ |
+| US-NY-WEST, US-NY-GENESE, US-NY-CENTRL, US-NY-NORTH, US-NY-MHK_VL, US-NY-CAPITL, US-NY-HUD_VL, US-NY-MILLWD, US-NY-DUNWOD, US-NY-NYC, US-NY-LONGIL (New York/NYISO) | ✅ | ✅ | ❌ |
+| CA-ON (Ontario/IESO) | ✅ | ✅ | ❌ |
 
 **Notes:**
 - AU and NZ: no public day-ahead data — `cheapest_hours` returns `available: false`
 - Contract comparison for NL, BE, AT, FR, IT etc. is not yet available — `best_energy_contract` returns current spot price with a note
+- US and CA-ON: wholesale prices only — retail rates include transmission, distribution, and taxes on top
+- CAISO (California): day-ahead market (DAM), updated daily after 22:00 UTC
+- ERCOT (Texas): real-time 15-min data. HB_WEST is the wind zone — can go negative
+- NYISO (New York): real-time 5-min data
+- IESO (Ontario): real-time 5-min data
 - Agents must not infer support for zones not listed here
 
 ---
