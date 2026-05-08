@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Elecz Electricity Price Signal API",
-    "version": "1.9.2",
-    "description": "Real-time electricity spot prices, cheapest hours, and contract comparison for 31 countries across Europe and Oceania. No authentication required.",
+    "version": "1.9.5",
+    "description": "Real-time electricity spot prices, cheapest hours, and contract comparison for 40 countries across Europe, Oceania, North America, and Asia. No authentication required.",
     "contact": {
       "name": "Zemlo AI / Elecz",
       "url": "https://elecz.com"
@@ -19,7 +19,7 @@
     "/signal/spot": {
       "get": {
         "summary": "Current electricity spot price",
-        "description": "Returns the real-time electricity spot price for the selected zone. Use when the user asks what electricity costs right now. Prices are in local currency units: NZD c/kWh for NZ, AUD c/kWh for AU, p/kWh for GB, c/kWh for EUR zones, ore/kWh for SEK/NOK/DKK zones. Updated hourly for Nordic/DE, every 30 minutes for GB/AU/NZ.",
+        "description": "Returns the real-time electricity spot price for the selected zone. Use when the user asks what electricity costs right now. Prices are in local currency units: KRW/kWh for KR/KR-JEJU, JPY/kWh for JP zones, NZD c/kWh for NZ, AUD c/kWh for AU, USD c/kWh for US zones, CAD c/kWh for CA-ON, p/kWh for GB, c/kWh for EUR zones, ore/kWh for SEK/NOK/DKK zones. Updated hourly for Nordic/DE/ENTSO-E, every 30 minutes for GB/AU/NZ, every 15 minutes for ERCOT, every 5 minutes for NYISO/IESO, hourly for KR/JP.",
         "operationId": "getSpotPrice",
         "parameters": [
           {
@@ -36,12 +36,21 @@
                 "ES", "PT", "HR", "BG", "SI", "SK", "GR",
                 "EE", "LV", "LT",
                 "CH", "RS", "BA", "ME", "MK",
+                "IE",
                 "GB",
                 "AU-NSW", "AU-VIC", "AU-QLD", "AU-SA", "AU-TAS",
-                "NZ-NI", "NZ-SI"
+                "NZ-NI", "NZ-SI",
+                "US-CA-NP15", "US-CA-SP15", "US-CA-ZP26",
+                "US-TX-HB_NORTH", "US-TX-HB_HOUSTON", "US-TX-HB_SOUTH", "US-TX-HB_WEST", "US-TX-HB_HUBAVG",
+                "US-TX-LZ_NORTH", "US-TX-LZ_HOUSTON", "US-TX-LZ_SOUTH", "US-TX-LZ_WEST",
+                "US-NY-WEST", "US-NY-GENESE", "US-NY-CENTRL", "US-NY-NORTH", "US-NY-MHK_VL",
+                "US-NY-CAPITL", "US-NY-HUD_VL", "US-NY-MILLWD", "US-NY-DUNWOD", "US-NY-NYC", "US-NY-LONGIL",
+                "CA-ON",
+                "KR", "KR-JEJU",
+                "JP-HKD", "JP-THK", "JP-TKY", "JP-CBU", "JP-HKR", "JP-KNS", "JP-CGK", "JP-SKK", "JP-KYS"
               ]
             },
-            "description": "Market zone. ENTSO-E: FI, SE, SE1-SE4, NO, NO1-NO5, DK, DK1-DK2, DE, NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK. UK: GB. Australia: AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS. New Zealand: NZ-NI, NZ-SI."
+            "description": "Market zone. ENTSO-E: FI, SE, SE1-SE4, NO, NO1-NO5, DK, DK1-DK2, DE, NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK, IE. UK: GB. Australia: AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS. New Zealand: NZ-NI, NZ-SI. California: US-CA-NP15, US-CA-SP15, US-CA-ZP26. Texas: US-TX-HB_*/LZ_*. New York: US-NY-*. Ontario: CA-ON. South Korea: KR, KR-JEJU. Japan: JP-HKD, JP-THK, JP-TKY, JP-CBU, JP-HKR, JP-KNS, JP-CGK, JP-SKK, JP-KYS."
           }
         ],
         "responses": {
@@ -80,7 +89,7 @@
     "/signal/cheapest-hours": {
       "get": {
         "summary": "Cheapest electricity hours in next 24h",
-        "description": "Returns the cheapest hours in the next 24 hours with current-hour context signals. Use when the user asks when to run appliances, charge an EV, or schedule high-consumption tasks. AU and NZ zones return available: false — no public day-ahead data exists for those markets.",
+        "description": "Returns the cheapest hours in the next 24 hours with current-hour context signals. Use when the user asks when to run appliances, charge an EV, or schedule high-consumption tasks. AU, NZ, and KR zones return available: false — no public day-ahead data exists for those markets. JP zones return JEPX day-ahead data in JPY/kWh.",
         "operationId": "getCheapestHours",
         "parameters": [
           {
@@ -97,12 +106,21 @@
                 "ES", "PT", "HR", "BG", "SI", "SK", "GR",
                 "EE", "LV", "LT",
                 "CH", "RS", "BA", "ME", "MK",
+                "IE",
                 "GB",
                 "AU-NSW", "AU-VIC", "AU-QLD", "AU-SA", "AU-TAS",
-                "NZ-NI", "NZ-SI"
+                "NZ-NI", "NZ-SI",
+                "US-CA-NP15", "US-CA-SP15", "US-CA-ZP26",
+                "US-TX-HB_NORTH", "US-TX-HB_HOUSTON", "US-TX-HB_SOUTH", "US-TX-HB_WEST", "US-TX-HB_HUBAVG",
+                "US-TX-LZ_NORTH", "US-TX-LZ_HOUSTON", "US-TX-LZ_SOUTH", "US-TX-LZ_WEST",
+                "US-NY-WEST", "US-NY-GENESE", "US-NY-CENTRL", "US-NY-NORTH", "US-NY-MHK_VL",
+                "US-NY-CAPITL", "US-NY-HUD_VL", "US-NY-MILLWD", "US-NY-DUNWOD", "US-NY-NYC", "US-NY-LONGIL",
+                "CA-ON",
+                "KR", "KR-JEJU",
+                "JP-HKD", "JP-THK", "JP-TKY", "JP-CBU", "JP-HKR", "JP-KNS", "JP-CGK", "JP-SKK", "JP-KYS"
               ]
             },
-            "description": "Market zone. AU and NZ zones return available: false."
+            "description": "Market zone. AU, NZ, KR, KR-JEJU return available: false. JP zones return JEPX day-ahead data."
           },
           {
             "name": "hours",
@@ -252,7 +270,7 @@
     "/signal": {
       "get": {
         "summary": "Full energy signal with contract comparison",
-        "description": "Returns spot price, energy state, and ranked contract comparison in one call. Use when the user asks which electricity contract to choose, whether to switch provider, or wants a full overview of their energy situation.",
+        "description": "Returns spot price, energy state, and ranked contract comparison in one call. Use when the user asks which electricity contract to choose, whether to switch provider, or wants a full overview of their energy situation. Contract comparison available for: FI, SE, NO, DK, DE, GB, AU-*, NZ-*. All other zones return current spot price with a note.",
         "operationId": "getFullSignal",
         "parameters": [
           {
@@ -269,9 +287,18 @@
                 "ES", "PT", "HR", "BG", "SI", "SK", "GR",
                 "EE", "LV", "LT",
                 "CH", "RS", "BA", "ME", "MK",
+                "IE",
                 "GB",
                 "AU-NSW", "AU-VIC", "AU-QLD", "AU-SA", "AU-TAS",
-                "NZ-NI", "NZ-SI"
+                "NZ-NI", "NZ-SI",
+                "US-CA-NP15", "US-CA-SP15", "US-CA-ZP26",
+                "US-TX-HB_NORTH", "US-TX-HB_HOUSTON", "US-TX-HB_SOUTH", "US-TX-HB_WEST", "US-TX-HB_HUBAVG",
+                "US-TX-LZ_NORTH", "US-TX-LZ_HOUSTON", "US-TX-LZ_SOUTH", "US-TX-LZ_WEST",
+                "US-NY-WEST", "US-NY-GENESE", "US-NY-CENTRL", "US-NY-NORTH", "US-NY-MHK_VL",
+                "US-NY-CAPITL", "US-NY-HUD_VL", "US-NY-MILLWD", "US-NY-DUNWOD", "US-NY-NYC", "US-NY-LONGIL",
+                "CA-ON",
+                "KR", "KR-JEJU",
+                "JP-HKD", "JP-THK", "JP-TKY", "JP-CBU", "JP-HKR", "JP-KNS", "JP-CGK", "JP-SKK", "JP-KYS"
               ]
             }
           },
@@ -368,7 +395,7 @@
                 },
                 "example": {
                   "signal": "elecz",
-                  "version": "1.9.2",
+                  "version": "1.9.5",
                   "zone": "FI",
                   "currency": "EUR",
                   "unit": "c/kWh",
@@ -471,7 +498,7 @@
                   "properties": {
                     "status":  { "type": "string", "example": "ok" },
                     "service": { "type": "string", "example": "elecz" },
-                    "version": { "type": "string", "example": "1.9.2" }
+                    "version": { "type": "string", "example": "1.9.5" }
                   }
                 }
               }
