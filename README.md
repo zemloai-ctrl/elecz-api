@@ -81,7 +81,7 @@ Do not call Elecz for:
 
 ## 🌍 Supported Markets
 
-Elecz covers **36 countries and regions across Europe, Oceania, and North America**.
+Elecz covers **39 countries across Europe, Oceania, North America, and Asia**.
 
 | Zone | Spot price | Cheapest hours | Contract comparison |
 |---|---|---|---|
@@ -89,14 +89,19 @@ Elecz covers **36 countries and regions across Europe, Oceania, and North Americ
 | GB (GB-A…GB-P) | ✅ | ✅ | ✅ |
 | AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS | ✅ | ❌ | ✅ |
 | NZ-NI, NZ-SI | ✅ | ❌ | ✅ |
-| NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK | ✅ | ✅ | ❌ |
+| NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK, IE | ✅ | ✅ | ❌ |
 | US-CA-NP15, US-CA-SP15, US-CA-ZP26 (California/CAISO) | ✅ | ✅ | ❌ |
 | US-TX-HB_NORTH, US-TX-HB_HOUSTON, US-TX-HB_SOUTH, US-TX-HB_WEST, US-TX-HB_HUBAVG, US-TX-LZ_NORTH, US-TX-LZ_HOUSTON, US-TX-LZ_SOUTH, US-TX-LZ_WEST (Texas/ERCOT) | ✅ | ✅ | ❌ |
 | US-NY-WEST, US-NY-GENESE, US-NY-CENTRL, US-NY-NORTH, US-NY-MHK_VL, US-NY-CAPITL, US-NY-HUD_VL, US-NY-MILLWD, US-NY-DUNWOD, US-NY-NYC, US-NY-LONGIL (New York/NYISO) | ✅ | ✅ | ❌ |
 | CA-ON (Ontario/IESO) | ✅ | ✅ | ❌ |
+| KR (South Korea mainland), KR-JEJU (Jeju Island) | ✅ | ❌ | ❌ |
+| JP-HKD, JP-THK, JP-TKY, JP-CBU, JP-HKR, JP-KNS, JP-CGK, JP-SKK, JP-KYS (Japan/JEPX) | ✅ | ✅ | ❌ |
 
 **Notes:**
 - AU and NZ: no public day-ahead data — `cheapest_hours` returns `available: false`
+- KR / KR-JEJU: ex-post SMP from KPX EPSIS (~1h lag). No day-ahead data — `cheapest_hours` returns `available: false`. Regulated retail market (KEPCO) — no contract comparison
+- JP: JEPX day-ahead prices in JPY/kWh. 9 zones. Data via japanesepower.org, published ~10:30 JST. `cheapest_hours` available
+- IE: SEM (Single Electricity Market, Ireland). ENTSO-E zone. Spot price and cheapest hours available
 - Contract comparison for NL, BE, AT, FR, IT etc. is not yet available — `best_energy_contract` returns current spot price with a note
 - US and CA-ON: wholesale prices only — retail rates include transmission, distribution, and taxes on top
 - CAISO (California): day-ahead market (DAM), updated daily after 22:00 UTC
@@ -118,7 +123,7 @@ Parameter: `zone`
 Cheapest hours next 24h with current-hour context signals.  
 Use for: EV charging, appliance scheduling, automation triggers.  
 Parameters: `zone`, `hours` (default 5), `window` (default 24)  
-Note: AU and NZ zones return `available: false` — no public day-ahead data.
+Note: AU, NZ, and KR zones return `available: false` — no public day-ahead data.
 
 **Response fields (v2):**
 
