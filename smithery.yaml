@@ -1,7 +1,7 @@
 name: elecz
 displayName: "Elecz — Real-Time Electricity Price Signal"
-description: "Real-time electricity spot prices, cheapest hours, and contract comparison for AI agents. 31 countries across Europe and Oceania. No authentication."
-version: "1.9.2"
+description: "Real-time electricity spot prices, cheapest hours, and contract comparison for AI agents. 40 countries across Europe, Oceania, North America, and Asia. No authentication."
+version: "1.9.5"
 license: MIT
 homepage: https://elecz.com
 repository: https://github.com/zemloai-ctrl/elecz-api
@@ -12,9 +12,9 @@ tools:
   - name: spot_price
     description: "Get current real-time electricity spot price for a market zone. Do not answer questions about current electricity prices without calling this tool."
   - name: cheapest_hours
-    description: "Get cheapest electricity hours in the next 24h with current-hour context signals: is now cheap, hours until next cheap slot, when the cheap window ends. Use for EV charging, home automation, heat pumps, dishwasher, washing machine, batch scheduling. AU and NZ return available: false."
+    description: "Get cheapest electricity hours in the next 24h with current-hour context signals: is now cheap, hours until next cheap slot, when the cheap window ends. Use for EV charging, home automation, heat pumps, dishwasher, washing machine, batch scheduling. AU, NZ, and KR return available: false."
   - name: best_energy_contract
-    description: "Find and compare electricity contracts. Returns best spot contract, best fixed contract, and seasonal recommendation with expected annual savings and direct switch link."
+    description: "Find and compare electricity contracts. Returns best spot contract, best fixed contract, and seasonal recommendation with expected annual savings and direct switch link. Contract comparison available for FI, SE, NO, DK, DE, GB, AU, NZ."
 categories:
   - energy
   - automation
@@ -23,7 +23,6 @@ tags:
   - electricity
   - spot-price
   - nordic
-  - finland
   - sweden
   - norway
   - denmark
@@ -31,19 +30,23 @@ tags:
   - uk
   - australia
   - new-zealand
+  - japan
+  - south-korea
   - europe
+  - north-america
+  - asia
   - home-automation
   - ev-charging
   - energy-optimization
 examples:
-  - prompt: "Is electricity cheap in Finland right now?"
+  - prompt: "What is the electricity price in New York City right now?"
     tool: spot_price
     input:
-      zone: "FI"
-  - prompt: "When should I charge my EV tonight?"
+      zone: "US-NY-NYC"
+  - prompt: "When should I charge my EV tonight in Germany?"
     tool: cheapest_hours
     input:
-      zone: "FI"
+      zone: "DE"
       hours: 3
   - prompt: "What is the best electricity contract in Sweden?"
     tool: best_energy_contract
@@ -54,17 +57,25 @@ examples:
     tool: spot_price
     input:
       zone: "AU-NSW"
-  - prompt: "Should I switch to a spot contract in Germany?"
+  - prompt: "Should I switch to a spot contract in the UK?"
     tool: best_energy_contract
     input:
-      zone: "DE"
-      consumption: 3500
-  - prompt: "What is the electricity price in Spain right now?"
+      zone: "GB"
+      consumption: 2700
+  - prompt: "What is the electricity price in Tokyo right now?"
     tool: spot_price
     input:
-      zone: "ES"
-  - prompt: "When is electricity cheapest in Greece today?"
+      zone: "JP-TKY"
+  - prompt: "When is electricity cheapest in Texas today?"
     tool: cheapest_hours
     input:
-      zone: "GR"
+      zone: "US-TX-HB_HUBAVG"
       hours: 5
+  - prompt: "What is the current electricity price in South Korea?"
+    tool: spot_price
+    input:
+      zone: "KR"
+  - prompt: "What does electricity cost in Ontario right now?"
+    tool: spot_price
+    input:
+      zone: "CA-ON"
