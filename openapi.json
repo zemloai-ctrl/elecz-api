@@ -62,9 +62,9 @@
                   "type": "object",
                   "properties": {
                     "signal":     { "type": "string", "example": "elecz_spot" },
-                    "zone":       { "type": "string", "example": "FI" },
-                    "currency":   { "type": "string", "example": "EUR" },
-                    "price":      { "type": "number", "example": 6.745 },
+                    "zone":       { "type": "string", "example": "US-NY-NYC" },
+                    "currency":   { "type": "string", "example": "USD" },
+                    "price":      { "type": "number", "example": 4.312 },
                     "unit":       { "type": "string", "example": "c/kWh" },
                     "timestamp":  { "type": "string", "format": "date-time" },
                     "powered_by": { "type": "string", "example": "Elecz.com" }
@@ -72,11 +72,12 @@
                 },
                 "example": {
                   "signal": "elecz_spot",
-                  "zone": "FI",
-                  "currency": "EUR",
-                  "price": 6.745,
+                  "zone": "US-NY-NYC",
+                  "currency": "USD",
+                  "price": 4.312,
                   "unit": "c/kWh",
-                  "timestamp": "2026-04-13T05:47:50Z",
+                  "timestamp": "2026-05-08T14:00:00Z",
+                  "disclaimer": "NYISO real-time wholesale price in USD c/kWh. Retail rates include transmission, distribution and taxes on top.",
                   "powered_by": "Elecz.com"
                 }
               }
@@ -229,8 +230,8 @@
                 },
                 "example": {
                   "available": true,
-                  "zone": "FI",
-                  "currency": "EUR",
+                  "zone": "US-NY-NYC",
+                  "currency": "USD",
                   "unit": "c/kWh",
                   "energy_state": "cheap",
                   "confidence": 0.9,
@@ -238,25 +239,25 @@
                   "current_hour_is_cheap": false,
                   "current_hour_rank": 5,
                   "cheap_window_ends": null,
-                  "next_cheap_hour": "2026-04-20T10:00:00+00:00",
+                  "next_cheap_hour": "2026-05-08T18:00:00+00:00",
                   "hours_until_next_cheap": 1,
                   "cheap_hours_remaining_today": 5,
                   "includes_next_day": true,
                   "data_complete": true,
                   "cheapest_hours": [
-                    { "hour": "2026-04-20T10:00", "price": 5.476, "unit": "c/kWh" },
-                    { "hour": "2026-04-20T11:00", "price": 5.769, "unit": "c/kWh" },
-                    { "hour": "2026-04-20T12:00", "price": 5.896, "unit": "c/kWh" },
-                    { "hour": "2026-04-20T14:00", "price": 5.410, "unit": "c/kWh" },
-                    { "hour": "2026-04-20T15:00", "price": 5.714, "unit": "c/kWh" }
+                    { "hour": "2026-05-08T18:00", "price": 2.841, "unit": "c/kWh" },
+                    { "hour": "2026-05-08T19:00", "price": 3.102, "unit": "c/kWh" },
+                    { "hour": "2026-05-08T20:00", "price": 3.445, "unit": "c/kWh" },
+                    { "hour": "2026-05-09T02:00", "price": 2.677, "unit": "c/kWh" },
+                    { "hour": "2026-05-09T03:00", "price": 2.913, "unit": "c/kWh" }
                   ],
                   "best_3h_window": {
-                    "start": "2026-04-20T13:00",
-                    "end": "2026-04-20T15:00",
+                    "start": "2026-05-08T18:00",
+                    "end": "2026-05-08T20:00",
                     "avg_price": 5.6917,
                     "note": "end is the start of the last cheap slot in the window"
                   },
-                  "avoid_hours": ["2026-04-21T02:00", "2026-04-20T21:00"],
+                  "avoid_hours": ["2026-05-08T16:00", "2026-05-08T17:00"],
                   "recommendation": "run_high_consumption_tasks",
                   "powered_by": "Elecz.com"
                 }
@@ -396,21 +397,21 @@
                 "example": {
                   "signal": "elecz",
                   "version": "1.9.5",
-                  "zone": "FI",
-                  "currency": "EUR",
-                  "unit": "c/kWh",
+                  "zone": "GB",
+                  "currency": "GBP",
+                  "unit": "p/kWh",
                   "energy_state": "normal",
                   "is_good_time_to_use_energy": false,
                   "switch_recommended": false,
                   "confidence": 0.95,
-                  "spot_price": { "value": 6.745, "local": 6.745, "unit": "c/kWh" },
+                  "spot_price": { "value": 18.43, "local": 18.43, "unit": "p/kWh" },
                   "best_contract": {
-                    "provider": "vare",
-                    "type": "spot",
-                    "spot_margin_ckwh": 0.36,
-                    "basic_fee_eur_month": 3.5,
-                    "annual_cost_estimate": 184.1,
-                    "trust_score": 60
+                    "provider": "octopus_agile",
+                    "type": "dynamic",
+                    "unit_rate_p_kwh": 18.43,
+                    "standing_charge_p_day": 53.0,
+                    "annual_cost_estimate": 691.0,
+                    "trust_score": 100
                   },
                   "top_contracts": [
                     {
