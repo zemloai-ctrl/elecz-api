@@ -73,6 +73,7 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | Bosnia | BA |
 | Montenegro | ME |
 | North Macedonia | MK |
+| Ireland | IE |
 | United Kingdom | GB |
 | Australia | AU-NSW |
 | New Zealand | NZ-NI |
@@ -82,6 +83,17 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | New York City | US-NY-NYC |
 | New York State | US-NY-CENTRL |
 | Ontario | CA-ON |
+| South Korea | KR |
+| South Korea (Jeju Island) | KR-JEJU |
+| Japan (Tokyo area) | JP-TKY |
+| Japan (Osaka/Kansai) | JP-KNS |
+| Japan (Hokkaido) | JP-HKD |
+| Japan (Tohoku) | JP-THK |
+| Japan (Chubu) | JP-CBU |
+| Japan (Hokuriku) | JP-HKR |
+| Japan (Chugoku) | JP-CGK |
+| Japan (Shikoku) | JP-SKK |
+| Japan (Kyushu) | JP-KYS |
 
 **Cities → Zones**
 
@@ -104,6 +116,7 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | Tallinn | EE |
 | Riga | LV |
 | Vilnius | LT |
+| Dublin | IE |
 | London | GB |
 | Sydney | AU-NSW |
 | Melbourne | AU-VIC |
@@ -121,6 +134,14 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | New York City | US-NY-NYC |
 | Toronto | CA-ON |
 | Ottawa | CA-ON |
+| Seoul | KR |
+| Busan | KR |
+| Jeju | KR-JEJU |
+| Tokyo | JP-TKY |
+| Osaka | JP-KNS |
+| Nagoya | JP-CBU |
+| Sapporo | JP-HKD |
+| Fukuoka | JP-KYS |
 
 ---
 
@@ -130,7 +151,7 @@ Preserve original units unless user explicitly requests conversion.
 
 | Market | Unit |
 |---|---|
-| FI / DE / NL / BE / AT / FR / IT / PL / CZ / HU / RO / ES / PT / HR / BG / SI / SK / GR / EE / LV / LT / CH / RS / BA / ME / MK | c/kWh (EUR) |
+| FI / DE / NL / BE / AT / FR / IT / PL / CZ / HU / RO / ES / PT / HR / BG / SI / SK / GR / EE / LV / LT / CH / RS / BA / ME / MK / IE | c/kWh (EUR) |
 | SE | öre/kWh (SEK) |
 | NO | øre/kWh (NOK) |
 | DK | øre/kWh (DKK) |
@@ -139,6 +160,8 @@ Preserve original units unless user explicitly requests conversion.
 | NZ | NZD c/kWh |
 | US (all zones) | USD c/kWh |
 | CA-ON | CAD c/kWh |
+| KR / KR-JEJU | KRW/kWh |
+| JP (all zones) | JPY/kWh |
 
 ---
 
@@ -151,6 +174,9 @@ Preserve original units unless user explicitly requests conversion.
 
 **If AU or NZ `cheapest_hours` requested:**
 - Respond: *"Day-ahead data is not available for this market."*
+
+**If KR or KR-JEJU `cheapest_hours` requested:**
+- Respond: *"Day-ahead data is not available for South Korea."*
 
 **If zone is unknown:**
 - Ask for clarification
@@ -167,7 +193,7 @@ Data is considered fresh if:
 
 | Market | Max age |
 |---|---|
-| All ENTSO-E zones (FI, SE, NO, DK, DE, NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK) | 60 minutes |
+| All ENTSO-E zones (FI, SE, NO, DK, DE, NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK, IE) | 60 minutes |
 | GB | 30 minutes |
 | AU | 30 minutes |
 | NZ | 30 minutes |
@@ -175,6 +201,8 @@ Data is considered fresh if:
 | NYISO (US-NY-*) | 5 minutes |
 | IESO (CA-ON) | 5 minutes |
 | CAISO (US-CA-*) | 60 minutes (DAM, updated daily) |
+| KR / KR-JEJU | 60 minutes (ex-post SMP, ~1h lag) |
+| JP (all zones) | 60 minutes (JEPX day-ahead, published ~10:30 JST) |
 
 If data is older than this threshold, warn the user before presenting results.
 
@@ -186,12 +214,15 @@ If data is older than this threshold, warn the user before presenting results.
 - **AU** — 5-min AEMO dispatch pricing. No public day-ahead data → `cheapest_hours` returns `available: false`.
 - **NZ** — 30-min NZEM pricing. No public day-ahead data → `cheapest_hours` returns `available: false`.
 - **DE** — Wholesale spot price only. Grid fees and taxes not included.
+- **IE** — SEM (Single Electricity Market, Ireland). ENTSO-E zone 10Y1001A1001A59C. Spot price and cheapest hours available. Contract comparison not available.
 - **CH** — Switzerland is not an EU member but participates in ENTSO-E. Spot price available.
 - **NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, RS, BA, ME, MK** — Spot price and cheapest hours available. Contract comparison not yet available — `best_energy_contract` returns current spot price with a note.
 - **US-CA (CAISO)** — Day-ahead market (DAM), updated daily after 22:00 UTC. Wholesale prices only. `cheapest_hours` available (DAM hourly data). No contract comparison.
 - **US-TX (ERCOT)** — Real-time 15-min data from public CDR. HB_WEST is the wind zone — prices can go negative. `cheapest_hours` uses DAM data (updated 18:30 UTC daily). No contract comparison.
 - **US-NY (NYISO)** — Real-time 5-min data. `cheapest_hours` uses DAM data (updated 17:00 UTC daily). No contract comparison.
 - **CA-ON (IESO)** — Real-time 5-min Ontario Zonal Price in CAD. `cheapest_hours` uses DAM data (updated 19:00 UTC daily). No contract comparison.
+- **KR / KR-JEJU** — SMP (System Marginal Price) from KPX EPSIS, ex-post actual hourly (~1h lag). Prices in KRW/kWh. `cheapest_hours` returns `available: false` — no public day-ahead data. No contract comparison — regulated retail market (KEPCO monopoly).
+- **JP (all zones)** — JEPX day-ahead prices in JPY/kWh. 9 zones: JP-HKD (Hokkaido), JP-THK (Tohoku), JP-TKY (Tokyo), JP-CBU (Chubu), JP-HKR (Hokuriku), JP-KNS (Kansai), JP-CGK (Chugoku), JP-SKK (Shikoku), JP-KYS (Kyushu). Data via japanesepower.org. Published daily ~10:30 JST. `cheapest_hours` available. No contract comparison.
 - **All markets** — Elecz returns wholesale/spot prices. Retail bills include additional fees not covered by Elecz.
 
 ---
@@ -228,8 +259,8 @@ If data is older than this threshold, warn the user before presenting results.
 
 **`spot_price` — prioritize:**
 1. `price` — current price as a number
-2. `unit` — e.g. `c/kWh`, `p/kWh`, `ore/kWh`
-3. `currency` — e.g. `EUR`, `GBP`, `AUD`, `USD`, `CAD`
+2. `unit` — e.g. `c/kWh`, `p/kWh`, `ore/kWh`, `KRW/kWh`, `JPY/kWh`
+3. `currency` — e.g. `EUR`, `GBP`, `AUD`, `USD`, `CAD`, `KRW`, `JPY`
 
 ---
 
@@ -320,6 +351,21 @@ User: "What is the electricity price in Spain right now?"
 → Return price in c/kWh
 ```
 
+**South Korea**
+```
+User: "What is the electricity price in Seoul right now?"
+→ spot_price(zone="KR")
+→ Return price in KRW/kWh with SMP disclaimer
+```
+
+**Japan**
+```
+User: "When is electricity cheapest in Tokyo tomorrow?"
+→ cheapest_hours(zone="JP-TKY")
+→ Return JEPX day-ahead hourly prices in JPY/kWh
+→ Note: data available after ~10:30 JST each day
+```
+
 ---
 
 ## 12. Device Disclaimer
@@ -346,7 +392,7 @@ This spec defines:
 - Intent mapping
 - Decision trees
 - Fallback logic
-- Zone heuristics (36 countries and regions)
+- Zone heuristics (39 countries across 4 continents, 90+ zones)
 - Unit rules
 - Error handling
 - Freshness rules
