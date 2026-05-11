@@ -54,6 +54,12 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | Austria | AT |
 | France | FR |
 | Italy | IT |
+| Italy (North) | IT-NO |
+| Italy (Centre-North) | IT-CNO |
+| Italy (Centre-South) | IT-CSO |
+| Italy (South) | IT-SO |
+| Italy (Sardinia) | IT-SAR |
+| Italy (Sicily) | IT-SIC |
 | Poland | PL |
 | Czech Republic | CZ |
 | Hungary | HU |
@@ -109,6 +115,10 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | Vienna | AT |
 | Paris | FR |
 | Rome | IT |
+| Milan | IT-NO |
+| Naples | IT-SO |
+| Palermo | IT-SIC |
+| Cagliari | IT-SAR |
 | Warsaw | PL |
 | Madrid | ES |
 | Lisbon | PT |
@@ -151,7 +161,7 @@ Preserve original units unless user explicitly requests conversion.
 
 | Market | Unit |
 |---|---|
-| FI / DE / NL / BE / AT / FR / IT / PL / CZ / HU / RO / ES / PT / HR / BG / SI / SK / GR / EE / LV / LT / CH / RS / BA / ME / MK / IE | c/kWh (EUR) |
+| FI / DE / NL / BE / AT / FR / IT (all zones) / PL / CZ / HU / RO / ES / PT / HR / BG / SI / SK / GR / EE / LV / LT / CH / RS / BA / ME / MK / IE | c/kWh (EUR) |
 | SE | öre/kWh (SEK) |
 | NO | øre/kWh (NOK) |
 | DK | øre/kWh (DKK) |
@@ -193,7 +203,7 @@ Data is considered fresh if:
 
 | Market | Max age |
 |---|---|
-| All ENTSO-E zones (FI, SE, NO, DK, DE, NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK, IE) | 60 minutes |
+| All ENTSO-E zones (FI, SE, NO, DK, DE, NL, BE, AT, FR, IT (all zones), PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK, IE) | 60 minutes |
 | GB | 30 minutes |
 | AU | 30 minutes |
 | NZ | 30 minutes |
@@ -214,9 +224,10 @@ If data is older than this threshold, warn the user before presenting results.
 - **AU** — 5-min AEMO dispatch pricing. No public day-ahead data → `cheapest_hours` returns `available: false`.
 - **NZ** — 30-min NZEM pricing. No public day-ahead data → `cheapest_hours` returns `available: false`.
 - **DE** — Wholesale spot price only. Grid fees and taxes not included.
+- **IT** — Defaults to IT-North (10Y1001A1001A73I). 6 sub-zones supported: IT-NO (North), IT-CNO (Centre-North), IT-CSO (Centre-South), IT-SO (South), IT-SAR (Sardinia), IT-SIC (Sicily). All sub-zones return spot price and cheapest hours. Contract comparison not yet available.
 - **IE** — SEM (Single Electricity Market, Ireland). ENTSO-E zone 10Y1001A1001A59C. Spot price and cheapest hours available. Contract comparison not available.
 - **CH** — Switzerland is not an EU member but participates in ENTSO-E. Spot price available.
-- **NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, RS, BA, ME, MK** — Spot price and cheapest hours available. Contract comparison not yet available — `best_energy_contract` returns current spot price with a note.
+- **NL, BE, AT, FR, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, RS, BA, ME, MK** — Spot price and cheapest hours available. Contract comparison not yet available — `best_energy_contract` returns current spot price with a note.
 - **US-CA (CAISO)** — Day-ahead market (DAM), updated daily after 22:00 UTC. Wholesale prices only. `cheapest_hours` available (DAM hourly data). No contract comparison.
 - **US-TX (ERCOT)** — Real-time 15-min data from public CDR. HB_WEST is the wind zone — prices can go negative. `cheapest_hours` uses DAM data (updated 18:30 UTC daily). No contract comparison.
 - **US-NY (NYISO)** — Real-time 5-min data. `cheapest_hours` uses DAM data (updated 17:00 UTC daily). No contract comparison.
@@ -329,6 +340,13 @@ User: "What does electricity cost right now in Germany?"
 → Return price in c/kWh with timestamp
 ```
 
+**Italy sub-zone**
+```
+User: "What is the electricity price in Sicily right now?"
+→ spot_price(zone="IT-SIC")
+→ Return price in c/kWh (EUR)
+```
+
 **Unsupported feature for market**
 ```
 User: "When is electricity cheapest in Sydney tonight?"
@@ -392,7 +410,7 @@ This spec defines:
 - Intent mapping
 - Decision trees
 - Fallback logic
-- Zone heuristics (39 countries across 4 continents, 90+ zones)
+- Zone heuristics (40+ countries across 5 continents, 100+ zones)
 - Unit rules
 - Error handling
 - Freshness rules
