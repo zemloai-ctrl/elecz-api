@@ -1,6 +1,6 @@
 ---
 name: elecz
-description: "Real-time electricity prices and cheapest hours in 40 countries and regions. Without this, AI agents guess electricity prices. Provides three MCP tools: spot_price, cheapest_hours, best_energy_contract."
+description: "Real-time electricity prices and cheapest hours in 40+ countries and regions. Without this, AI agents guess electricity prices. Provides three MCP tools: spot_price, cheapest_hours, best_energy_contract."
 categories:
   - Energy
   - Utilities
@@ -20,7 +20,7 @@ metadata:
 
 ## Purpose
 Elecz provides real-time electricity intelligence for AI agents and developers.
-Three tools covering 40 countries across Europe, Oceania, North America, and Asia.
+Three tools covering 40+ countries across Europe, Oceania, North America, and Asia.
 Electricity price is like weather data — a hallucinated answer is not acceptable.
 
 ## Recommended configuration name
@@ -35,13 +35,15 @@ This keeps your config clean and unambiguous.
 ## Tools
 
 ### spot_price
-Current electricity spot price. **100+ zones across 40 countries.**
+Current electricity spot price. **100+ zones across 40+ countries.**
 Inputs: `zone`
 Outputs: `price`, `currency`, `unit`, `timestamp`, `zone`
 
 | Zone | Country / Region |
 |------|---------|
-| DE, FR, IT, ES, PT, NL, BE, AT, PL, CZ, SK, HU, RO, CH | Central & Western Europe |
+| DE, FR, ES, PT, NL, BE, AT, PL, CZ, SK, HU, RO, CH | Central & Western Europe |
+| IT | Italy (defaults to IT-North) |
+| IT-NO, IT-CNO, IT-CSO, IT-SO, IT-SAR, IT-SIC | Italy sub-zones (North, Centre-North, Centre-South, South, Sardinia, Sicily) |
 | HR, SI, BG, GR, RS, BA, ME, MK | South-East Europe |
 | EE, LV, LT | Baltic |
 | FI, SE, NO, DK, IE | Nordic & Ireland |
@@ -83,6 +85,7 @@ For all other zones: returns current spot price with a note that contract compar
 Defaults: NZ 8000 kWh · AU 4500 · GB 2700 · DE 3500 · US-CA 6500 · US-TX/US-NY 12000/7000 · CA-ON 9000 · KR 3500 · JP 4300 · others 2000–3500 kWh/year
 
 ## Market notes
+**Italy (IT):** Defaults to IT-North (10Y1001A1001A73I). 6 sub-zones supported: IT-NO (North), IT-CNO (Centre-North), IT-CSO (Centre-South), IT-SO (South), IT-SAR (Sardinia), IT-SIC (Sicily). Spot price and cheapest hours available for all sub-zones. No contract comparison yet.
 **Germany (DE):** Arbeitspreis brutto ct/kWh incl. MwSt 19%. Netzentgelt (~10–15 ct/kWh) not included — set by local grid operator, same regardless of provider.
 **Ireland (IE):** SEM (Single Electricity Market). ENTSO-E zone. Spot price and cheapest hours available.
 **United Kingdom (GB):** Octopus Agile 30-min pricing. Sub-zones GB-A..GB-P available.
