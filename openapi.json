@@ -3,7 +3,7 @@
   "info": {
     "title": "Elecz Electricity Price Signal API",
     "version": "1.9.5",
-    "description": "Real-time electricity spot prices, cheapest hours, and contract comparison for 40 countries across Europe, Oceania, North America, and Asia. No authentication required.",
+    "description": "Real-time electricity spot prices, cheapest hours, and contract comparison for 40+ countries across Europe, Oceania, North America, and Asia. No authentication required.",
     "contact": {
       "name": "Zemlo AI / Elecz",
       "url": "https://elecz.com"
@@ -29,28 +29,99 @@
             "schema": {
               "type": "string",
               "enum": [
-                "FI", "SE", "SE1", "SE2", "SE3", "SE4",
-                "NO", "NO1", "NO2", "NO3", "NO4", "NO5",
-                "DK", "DK1", "DK2",
-                "DE", "NL", "BE", "AT", "FR", "IT", "PL", "CZ", "HU", "RO",
-                "ES", "PT", "HR", "BG", "SI", "SK", "GR",
-                "EE", "LV", "LT",
-                "CH", "RS", "BA", "ME", "MK",
+                "FI",
+                "SE",
+                "SE1",
+                "SE2",
+                "SE3",
+                "SE4",
+                "NO",
+                "NO1",
+                "NO2",
+                "NO3",
+                "NO4",
+                "NO5",
+                "DK",
+                "DK1",
+                "DK2",
+                "DE",
+                "NL",
+                "BE",
+                "AT",
+                "FR",
+                "IT",
+                "IT-NO",
+                "IT-CNO",
+                "IT-CSO",
+                "IT-SO",
+                "IT-SAR",
+                "IT-SIC",
+                "PL",
+                "CZ",
+                "HU",
+                "RO",
+                "ES",
+                "PT",
+                "HR",
+                "BG",
+                "SI",
+                "SK",
+                "GR",
+                "EE",
+                "LV",
+                "LT",
+                "CH",
+                "RS",
+                "BA",
+                "ME",
+                "MK",
                 "IE",
                 "GB",
-                "AU-NSW", "AU-VIC", "AU-QLD", "AU-SA", "AU-TAS",
-                "NZ-NI", "NZ-SI",
-                "US-CA-NP15", "US-CA-SP15", "US-CA-ZP26",
-                "US-TX-HB_NORTH", "US-TX-HB_HOUSTON", "US-TX-HB_SOUTH", "US-TX-HB_WEST", "US-TX-HB_HUBAVG",
-                "US-TX-LZ_NORTH", "US-TX-LZ_HOUSTON", "US-TX-LZ_SOUTH", "US-TX-LZ_WEST",
-                "US-NY-WEST", "US-NY-GENESE", "US-NY-CENTRL", "US-NY-NORTH", "US-NY-MHK_VL",
-                "US-NY-CAPITL", "US-NY-HUD_VL", "US-NY-MILLWD", "US-NY-DUNWOD", "US-NY-NYC", "US-NY-LONGIL",
+                "AU-NSW",
+                "AU-VIC",
+                "AU-QLD",
+                "AU-SA",
+                "AU-TAS",
+                "NZ-NI",
+                "NZ-SI",
+                "US-CA-NP15",
+                "US-CA-SP15",
+                "US-CA-ZP26",
+                "US-TX-HB_NORTH",
+                "US-TX-HB_HOUSTON",
+                "US-TX-HB_SOUTH",
+                "US-TX-HB_WEST",
+                "US-TX-HB_HUBAVG",
+                "US-TX-LZ_NORTH",
+                "US-TX-LZ_HOUSTON",
+                "US-TX-LZ_SOUTH",
+                "US-TX-LZ_WEST",
+                "US-NY-WEST",
+                "US-NY-GENESE",
+                "US-NY-CENTRL",
+                "US-NY-NORTH",
+                "US-NY-MHK_VL",
+                "US-NY-CAPITL",
+                "US-NY-HUD_VL",
+                "US-NY-MILLWD",
+                "US-NY-DUNWOD",
+                "US-NY-NYC",
+                "US-NY-LONGIL",
                 "CA-ON",
-                "KR", "KR-JEJU",
-                "JP-HKD", "JP-THK", "JP-TKY", "JP-CBU", "JP-HKR", "JP-KNS", "JP-CGK", "JP-SKK", "JP-KYS"
+                "KR",
+                "KR-JEJU",
+                "JP-HKD",
+                "JP-THK",
+                "JP-TKY",
+                "JP-CBU",
+                "JP-HKR",
+                "JP-KNS",
+                "JP-CGK",
+                "JP-SKK",
+                "JP-KYS"
               ]
             },
-            "description": "Market zone. ENTSO-E: FI, SE, SE1-SE4, NO, NO1-NO5, DK, DK1-DK2, DE, NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK, IE. UK: GB. Australia: AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS. New Zealand: NZ-NI, NZ-SI. California: US-CA-NP15, US-CA-SP15, US-CA-ZP26. Texas: US-TX-HB_*/LZ_*. New York: US-NY-*. Ontario: CA-ON. South Korea: KR, KR-JEJU. Japan: JP-HKD, JP-THK, JP-TKY, JP-CBU, JP-HKR, JP-KNS, JP-CGK, JP-SKK, JP-KYS."
+            "description": "Market zone. ENTSO-E: FI, SE, SE1-SE4, NO, NO1-NO5, DK, DK1-DK2, DE, NL, BE, AT, FR, IT, IT-NO, IT-CNO, IT-CSO, IT-SO, IT-SAR, IT-SIC, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK, IE. UK: GB. Australia: AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS. New Zealand: NZ-NI, NZ-SI. California: US-CA-NP15, US-CA-SP15, US-CA-ZP26. Texas: US-TX-HB_*/LZ_*. New York: US-NY-*. Ontario: CA-ON. South Korea: KR, KR-JEJU. Japan: JP-HKD, JP-THK, JP-TKY, JP-CBU, JP-HKR, JP-KNS, JP-CGK, JP-SKK, JP-KYS."
           }
         ],
         "responses": {
@@ -61,13 +132,34 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "signal":     { "type": "string", "example": "elecz_spot" },
-                    "zone":       { "type": "string", "example": "US-NY-NYC" },
-                    "currency":   { "type": "string", "example": "USD" },
-                    "price":      { "type": "number", "example": 4.312 },
-                    "unit":       { "type": "string", "example": "c/kWh" },
-                    "timestamp":  { "type": "string", "format": "date-time" },
-                    "powered_by": { "type": "string", "example": "Elecz.com" }
+                    "signal": {
+                      "type": "string",
+                      "example": "elecz_spot"
+                    },
+                    "zone": {
+                      "type": "string",
+                      "example": "US-NY-NYC"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "example": "USD"
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 4.312
+                    },
+                    "unit": {
+                      "type": "string",
+                      "example": "c/kWh"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "powered_by": {
+                      "type": "string",
+                      "example": "Elecz.com"
+                    }
                   }
                 },
                 "example": {
@@ -86,11 +178,10 @@
         }
       }
     },
-
     "/signal/cheapest-hours": {
       "get": {
         "summary": "Cheapest electricity hours in next 24h",
-        "description": "Returns the cheapest hours in the next 24 hours with current-hour context signals. Use when the user asks when to run appliances, charge an EV, or schedule high-consumption tasks. AU, NZ, and KR zones return available: false — no public day-ahead data exists for those markets. JP zones return JEPX day-ahead data in JPY/kWh.",
+        "description": "Returns the cheapest hours in the next 24 hours with current-hour context signals. Use when the user asks when to run appliances, charge an EV, or schedule high-consumption tasks. AU, NZ, and KR zones return available: false — no public day-ahead data exists for those markets. JP zones return JEPX day-ahead data in JPY/kWh. IT sub-zones (IT-NO, IT-CNO, IT-CSO, IT-SO, IT-SAR, IT-SIC) return ENTSO-E day-ahead data.",
         "operationId": "getCheapestHours",
         "parameters": [
           {
@@ -100,41 +191,118 @@
             "schema": {
               "type": "string",
               "enum": [
-                "FI", "SE", "SE1", "SE2", "SE3", "SE4",
-                "NO", "NO1", "NO2", "NO3", "NO4", "NO5",
-                "DK", "DK1", "DK2",
-                "DE", "NL", "BE", "AT", "FR", "IT", "PL", "CZ", "HU", "RO",
-                "ES", "PT", "HR", "BG", "SI", "SK", "GR",
-                "EE", "LV", "LT",
-                "CH", "RS", "BA", "ME", "MK",
+                "FI",
+                "SE",
+                "SE1",
+                "SE2",
+                "SE3",
+                "SE4",
+                "NO",
+                "NO1",
+                "NO2",
+                "NO3",
+                "NO4",
+                "NO5",
+                "DK",
+                "DK1",
+                "DK2",
+                "DE",
+                "NL",
+                "BE",
+                "AT",
+                "FR",
+                "IT",
+                "IT-NO",
+                "IT-CNO",
+                "IT-CSO",
+                "IT-SO",
+                "IT-SAR",
+                "IT-SIC",
+                "PL",
+                "CZ",
+                "HU",
+                "RO",
+                "ES",
+                "PT",
+                "HR",
+                "BG",
+                "SI",
+                "SK",
+                "GR",
+                "EE",
+                "LV",
+                "LT",
+                "CH",
+                "RS",
+                "BA",
+                "ME",
+                "MK",
                 "IE",
                 "GB",
-                "AU-NSW", "AU-VIC", "AU-QLD", "AU-SA", "AU-TAS",
-                "NZ-NI", "NZ-SI",
-                "US-CA-NP15", "US-CA-SP15", "US-CA-ZP26",
-                "US-TX-HB_NORTH", "US-TX-HB_HOUSTON", "US-TX-HB_SOUTH", "US-TX-HB_WEST", "US-TX-HB_HUBAVG",
-                "US-TX-LZ_NORTH", "US-TX-LZ_HOUSTON", "US-TX-LZ_SOUTH", "US-TX-LZ_WEST",
-                "US-NY-WEST", "US-NY-GENESE", "US-NY-CENTRL", "US-NY-NORTH", "US-NY-MHK_VL",
-                "US-NY-CAPITL", "US-NY-HUD_VL", "US-NY-MILLWD", "US-NY-DUNWOD", "US-NY-NYC", "US-NY-LONGIL",
+                "AU-NSW",
+                "AU-VIC",
+                "AU-QLD",
+                "AU-SA",
+                "AU-TAS",
+                "NZ-NI",
+                "NZ-SI",
+                "US-CA-NP15",
+                "US-CA-SP15",
+                "US-CA-ZP26",
+                "US-TX-HB_NORTH",
+                "US-TX-HB_HOUSTON",
+                "US-TX-HB_SOUTH",
+                "US-TX-HB_WEST",
+                "US-TX-HB_HUBAVG",
+                "US-TX-LZ_NORTH",
+                "US-TX-LZ_HOUSTON",
+                "US-TX-LZ_SOUTH",
+                "US-TX-LZ_WEST",
+                "US-NY-WEST",
+                "US-NY-GENESE",
+                "US-NY-CENTRL",
+                "US-NY-NORTH",
+                "US-NY-MHK_VL",
+                "US-NY-CAPITL",
+                "US-NY-HUD_VL",
+                "US-NY-MILLWD",
+                "US-NY-DUNWOD",
+                "US-NY-NYC",
+                "US-NY-LONGIL",
                 "CA-ON",
-                "KR", "KR-JEJU",
-                "JP-HKD", "JP-THK", "JP-TKY", "JP-CBU", "JP-HKR", "JP-KNS", "JP-CGK", "JP-SKK", "JP-KYS"
+                "KR",
+                "KR-JEJU",
+                "JP-HKD",
+                "JP-THK",
+                "JP-TKY",
+                "JP-CBU",
+                "JP-HKR",
+                "JP-KNS",
+                "JP-CGK",
+                "JP-SKK",
+                "JP-KYS"
               ]
             },
-            "description": "Market zone. AU, NZ, KR, KR-JEJU return available: false. JP zones return JEPX day-ahead data."
+            "description": "Market zone. AU, NZ, KR, KR-JEJU return available: false. JP zones return JEPX day-ahead data. IT sub-zones: IT-NO, IT-CNO, IT-CSO, IT-SO, IT-SAR, IT-SIC."
           },
           {
             "name": "hours",
             "in": "query",
             "required": false,
-            "schema": { "type": "integer", "default": 5 },
+            "schema": {
+              "type": "integer",
+              "default": 5
+            },
             "description": "Number of cheapest slots to return."
           },
           {
             "name": "window",
             "in": "query",
             "required": false,
-            "schema": { "type": "integer", "default": 24 },
+            "schema": {
+              "type": "integer",
+              "default": 24
+            },
             "description": "Hours to look ahead."
           }
         ],
@@ -146,19 +314,39 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "available":     { "type": "boolean" },
-                    "zone":          { "type": "string" },
-                    "currency":      { "type": "string" },
-                    "unit":          { "type": "string" },
+                    "available": {
+                      "type": "boolean"
+                    },
+                    "zone": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
                     "energy_state": {
                       "type": "string",
-                      "enum": ["cheap", "normal", "expensive", "negative", "unknown"],
+                      "enum": [
+                        "cheap",
+                        "normal",
+                        "expensive",
+                        "negative",
+                        "unknown"
+                      ],
                       "description": "Spot price vs daily average. cheap = below 70% of avg. Independent from current_hour_is_cheap."
                     },
-                    "confidence":    { "type": "number" },
+                    "confidence": {
+                      "type": "number"
+                    },
                     "current_hour_signal": {
                       "type": "string",
-                      "enum": ["low", "medium", "high"],
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high"
+                      ],
                       "description": "Relative position in today's price distribution. low = rank 1-8, medium = 9-16, high = 17-24. Returns medium if day prices are flat (spread < 20% of average)."
                     },
                     "current_hour_is_cheap": {
@@ -205,27 +393,53 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "hour":  { "type": "string", "description": "YYYY-MM-DDTHH:MM (UTC, no timezone suffix)" },
-                          "price": { "type": "number" },
-                          "unit":  { "type": "string" }
+                          "hour": {
+                            "type": "string",
+                            "description": "YYYY-MM-DDTHH:MM (UTC, no timezone suffix)"
+                          },
+                          "price": {
+                            "type": "number"
+                          },
+                          "unit": {
+                            "type": "string"
+                          }
                         }
                       }
                     },
                     "best_3h_window": {
                       "type": "object",
                       "properties": {
-                        "start":     { "type": "string" },
-                        "end":       { "type": "string" },
-                        "avg_price": { "type": "number" },
-                        "note":      { "type": "string" }
+                        "start": {
+                          "type": "string"
+                        },
+                        "end": {
+                          "type": "string"
+                        },
+                        "avg_price": {
+                          "type": "number"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
                       }
                     },
-                    "avoid_hours":    { "type": "array", "items": { "type": "string" } },
+                    "avoid_hours": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
                     "recommendation": {
                       "type": "string",
-                      "enum": ["run_high_consumption_tasks", "normal_usage", "avoid_high_consumption"]
+                      "enum": [
+                        "run_high_consumption_tasks",
+                        "normal_usage",
+                        "avoid_high_consumption"
+                      ]
                     },
-                    "powered_by": { "type": "string" }
+                    "powered_by": {
+                      "type": "string"
+                    }
                   }
                 },
                 "example": {
@@ -245,11 +459,31 @@
                   "includes_next_day": true,
                   "data_complete": true,
                   "cheapest_hours": [
-                    { "hour": "2026-05-08T18:00", "price": 2.841, "unit": "c/kWh" },
-                    { "hour": "2026-05-08T19:00", "price": 3.102, "unit": "c/kWh" },
-                    { "hour": "2026-05-08T20:00", "price": 3.445, "unit": "c/kWh" },
-                    { "hour": "2026-05-09T02:00", "price": 2.677, "unit": "c/kWh" },
-                    { "hour": "2026-05-09T03:00", "price": 2.913, "unit": "c/kWh" }
+                    {
+                      "hour": "2026-05-08T18:00",
+                      "price": 2.841,
+                      "unit": "c/kWh"
+                    },
+                    {
+                      "hour": "2026-05-08T19:00",
+                      "price": 3.102,
+                      "unit": "c/kWh"
+                    },
+                    {
+                      "hour": "2026-05-08T20:00",
+                      "price": 3.445,
+                      "unit": "c/kWh"
+                    },
+                    {
+                      "hour": "2026-05-09T02:00",
+                      "price": 2.677,
+                      "unit": "c/kWh"
+                    },
+                    {
+                      "hour": "2026-05-09T03:00",
+                      "price": 2.913,
+                      "unit": "c/kWh"
+                    }
                   ],
                   "best_3h_window": {
                     "start": "2026-05-08T18:00",
@@ -257,7 +491,10 @@
                     "avg_price": 5.6917,
                     "note": "end is the start of the last cheap slot in the window"
                   },
-                  "avoid_hours": ["2026-05-08T16:00", "2026-05-08T17:00"],
+                  "avoid_hours": [
+                    "2026-05-08T16:00",
+                    "2026-05-08T17:00"
+                  ],
                   "recommendation": "run_high_consumption_tasks",
                   "powered_by": "Elecz.com"
                 }
@@ -267,7 +504,6 @@
         }
       }
     },
-
     "/signal": {
       "get": {
         "summary": "Full energy signal with contract comparison",
@@ -281,25 +517,96 @@
             "schema": {
               "type": "string",
               "enum": [
-                "FI", "SE", "SE1", "SE2", "SE3", "SE4",
-                "NO", "NO1", "NO2", "NO3", "NO4", "NO5",
-                "DK", "DK1", "DK2",
-                "DE", "NL", "BE", "AT", "FR", "IT", "PL", "CZ", "HU", "RO",
-                "ES", "PT", "HR", "BG", "SI", "SK", "GR",
-                "EE", "LV", "LT",
-                "CH", "RS", "BA", "ME", "MK",
+                "FI",
+                "SE",
+                "SE1",
+                "SE2",
+                "SE3",
+                "SE4",
+                "NO",
+                "NO1",
+                "NO2",
+                "NO3",
+                "NO4",
+                "NO5",
+                "DK",
+                "DK1",
+                "DK2",
+                "DE",
+                "NL",
+                "BE",
+                "AT",
+                "FR",
+                "IT",
+                "IT-NO",
+                "IT-CNO",
+                "IT-CSO",
+                "IT-SO",
+                "IT-SAR",
+                "IT-SIC",
+                "PL",
+                "CZ",
+                "HU",
+                "RO",
+                "ES",
+                "PT",
+                "HR",
+                "BG",
+                "SI",
+                "SK",
+                "GR",
+                "EE",
+                "LV",
+                "LT",
+                "CH",
+                "RS",
+                "BA",
+                "ME",
+                "MK",
                 "IE",
                 "GB",
-                "AU-NSW", "AU-VIC", "AU-QLD", "AU-SA", "AU-TAS",
-                "NZ-NI", "NZ-SI",
-                "US-CA-NP15", "US-CA-SP15", "US-CA-ZP26",
-                "US-TX-HB_NORTH", "US-TX-HB_HOUSTON", "US-TX-HB_SOUTH", "US-TX-HB_WEST", "US-TX-HB_HUBAVG",
-                "US-TX-LZ_NORTH", "US-TX-LZ_HOUSTON", "US-TX-LZ_SOUTH", "US-TX-LZ_WEST",
-                "US-NY-WEST", "US-NY-GENESE", "US-NY-CENTRL", "US-NY-NORTH", "US-NY-MHK_VL",
-                "US-NY-CAPITL", "US-NY-HUD_VL", "US-NY-MILLWD", "US-NY-DUNWOD", "US-NY-NYC", "US-NY-LONGIL",
+                "AU-NSW",
+                "AU-VIC",
+                "AU-QLD",
+                "AU-SA",
+                "AU-TAS",
+                "NZ-NI",
+                "NZ-SI",
+                "US-CA-NP15",
+                "US-CA-SP15",
+                "US-CA-ZP26",
+                "US-TX-HB_NORTH",
+                "US-TX-HB_HOUSTON",
+                "US-TX-HB_SOUTH",
+                "US-TX-HB_WEST",
+                "US-TX-HB_HUBAVG",
+                "US-TX-LZ_NORTH",
+                "US-TX-LZ_HOUSTON",
+                "US-TX-LZ_SOUTH",
+                "US-TX-LZ_WEST",
+                "US-NY-WEST",
+                "US-NY-GENESE",
+                "US-NY-CENTRL",
+                "US-NY-NORTH",
+                "US-NY-MHK_VL",
+                "US-NY-CAPITL",
+                "US-NY-HUD_VL",
+                "US-NY-MILLWD",
+                "US-NY-DUNWOD",
+                "US-NY-NYC",
+                "US-NY-LONGIL",
                 "CA-ON",
-                "KR", "KR-JEJU",
-                "JP-HKD", "JP-THK", "JP-TKY", "JP-CBU", "JP-HKR", "JP-KNS", "JP-CGK", "JP-SKK", "JP-KYS"
+                "KR",
+                "KR-JEJU",
+                "JP-HKD",
+                "JP-THK",
+                "JP-TKY",
+                "JP-CBU",
+                "JP-HKR",
+                "JP-KNS",
+                "JP-CGK",
+                "JP-SKK",
+                "JP-KYS"
               ]
             }
           },
@@ -307,14 +614,23 @@
             "name": "consumption",
             "in": "query",
             "required": false,
-            "schema": { "type": "integer" },
+            "schema": {
+              "type": "integer"
+            },
             "description": "Annual kWh consumption. Defaults: NZ 8000, AU 4500, GB 2700, DE 3500, Nordic 2000."
           },
           {
             "name": "heating",
             "in": "query",
             "required": false,
-            "schema": { "type": "string", "enum": ["district", "electric"], "default": "district" }
+            "schema": {
+              "type": "string",
+              "enum": [
+                "district",
+                "electric"
+              ],
+              "default": "district"
+            }
           }
         ],
         "responses": {
@@ -325,37 +641,85 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "signal":   { "type": "string" },
-                    "version":  { "type": "string" },
-                    "zone":     { "type": "string" },
-                    "currency": { "type": "string" },
-                    "unit":     { "type": "string" },
-                    "timestamp": { "type": "string", "format": "date-time" },
+                    "signal": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    },
+                    "zone": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
                     "energy_state": {
                       "type": "string",
-                      "enum": ["cheap", "normal", "expensive", "negative", "unknown"]
+                      "enum": [
+                        "cheap",
+                        "normal",
+                        "expensive",
+                        "negative",
+                        "unknown"
+                      ]
                     },
-                    "is_good_time_to_use_energy": { "type": "boolean" },
-                    "switch_recommended": { "type": "boolean" },
-                    "confidence": { "type": "number" },
+                    "is_good_time_to_use_energy": {
+                      "type": "boolean"
+                    },
+                    "switch_recommended": {
+                      "type": "boolean"
+                    },
+                    "confidence": {
+                      "type": "number"
+                    },
                     "spot_price": {
                       "type": "object",
                       "properties": {
-                        "value": { "type": "number" },
-                        "local": { "type": "number" },
-                        "unit":  { "type": "string" }
+                        "value": {
+                          "type": "number"
+                        },
+                        "local": {
+                          "type": "number"
+                        },
+                        "unit": {
+                          "type": "string"
+                        }
                       }
                     },
                     "best_contract": {
                       "type": "object",
                       "properties": {
-                        "provider":             { "type": "string" },
-                        "type":                 { "type": "string" },
-                        "spot_margin_ckwh":     { "type": "number", "nullable": true },
-                        "arbeitspreis_ckwh":    { "type": "number", "nullable": true },
-                        "basic_fee_eur_month":  { "type": "number", "nullable": true },
-                        "annual_cost_estimate": { "type": "number" },
-                        "trust_score":          { "type": "integer" }
+                        "provider": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
+                        },
+                        "spot_margin_ckwh": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "arbeitspreis_ckwh": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "basic_fee_eur_month": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "annual_cost_estimate": {
+                          "type": "number"
+                        },
+                        "trust_score": {
+                          "type": "integer"
+                        }
                       }
                     },
                     "top_contracts": {
@@ -363,35 +727,82 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "rank":                 { "type": "integer" },
-                          "provider":             { "type": "string" },
-                          "type":                 { "type": "string" },
-                          "spot_margin_ckwh":     { "type": "number", "nullable": true },
-                          "arbeitspreis_ckwh":    { "type": "number", "nullable": true },
-                          "basic_fee_eur_month":  { "type": "number", "nullable": true },
-                          "annual_cost_estimate": { "type": "number" },
-                          "trust_score":          { "type": "integer" },
-                          "provider_url":         { "type": "string" }
+                          "rank": {
+                            "type": "integer"
+                          },
+                          "provider": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "spot_margin_ckwh": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "arbeitspreis_ckwh": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "basic_fee_eur_month": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "annual_cost_estimate": {
+                            "type": "number"
+                          },
+                          "trust_score": {
+                            "type": "integer"
+                          },
+                          "provider_url": {
+                            "type": "string"
+                          }
                         }
                       }
                     },
-                    "decision_hint": { "type": "string" },
-                    "reason":        { "type": "string" },
+                    "decision_hint": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
                     "action": {
                       "type": "object",
                       "properties": {
-                        "type":                        { "type": "string" },
-                        "available":                   { "type": "boolean" },
-                        "action_link":                 { "type": "string" },
-                        "expected_savings_year":       { "type": "number", "nullable": true },
-                        "expected_savings_local_year": { "type": "number", "nullable": true },
-                        "savings_currency":            { "type": "string" },
-                        "savings_basis":               { "type": "string" },
-                        "confidence":                  { "type": "number" },
-                        "status":                      { "type": "string" }
+                        "type": {
+                          "type": "string"
+                        },
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "action_link": {
+                          "type": "string"
+                        },
+                        "expected_savings_year": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "expected_savings_local_year": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "savings_currency": {
+                          "type": "string"
+                        },
+                        "savings_basis": {
+                          "type": "string"
+                        },
+                        "confidence": {
+                          "type": "number"
+                        },
+                        "status": {
+                          "type": "string"
+                        }
                       }
                     },
-                    "powered_by": { "type": "string" }
+                    "powered_by": {
+                      "type": "string"
+                    }
                   }
                 },
                 "example": {
@@ -404,7 +815,11 @@
                   "is_good_time_to_use_energy": false,
                   "switch_recommended": false,
                   "confidence": 0.95,
-                  "spot_price": { "value": 18.43, "local": 18.43, "unit": "p/kWh" },
+                  "spot_price": {
+                    "value": 18.43,
+                    "local": 18.43,
+                    "unit": "p/kWh"
+                  },
                   "best_contract": {
                     "provider": "octopus_agile",
                     "type": "dynamic",
@@ -455,7 +870,6 @@
         }
       }
     },
-
     "/go/{provider}": {
       "get": {
         "summary": "Redirect to provider website",
@@ -466,24 +880,31 @@
             "name": "provider",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Provider identifier, e.g. tibber, vattenfall, octopus_agile."
           },
           {
             "name": "zone",
             "in": "query",
             "required": false,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Market zone for correct provider URL routing."
           }
         ],
         "responses": {
-          "302": { "description": "Redirect to provider URL" },
-          "404": { "description": "Provider not found" }
+          "302": {
+            "description": "Redirect to provider URL"
+          },
+          "404": {
+            "description": "Provider not found"
+          }
         }
       }
     },
-
     "/health": {
       "get": {
         "summary": "Health check",
@@ -497,9 +918,18 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status":  { "type": "string", "example": "ok" },
-                    "service": { "type": "string", "example": "elecz" },
-                    "version": { "type": "string", "example": "1.9.5" }
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "service": {
+                      "type": "string",
+                      "example": "elecz"
+                    },
+                    "version": {
+                      "type": "string",
+                      "example": "1.9.5"
+                    }
                   }
                 }
               }
