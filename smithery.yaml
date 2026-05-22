@@ -1,7 +1,7 @@
 name: elecz
 displayName: "Elecz — Real-Time Electricity Price Signal"
-description: "Real-time electricity spot prices, cheapest hours, and contract comparison for AI agents. 40 countries across Europe, Oceania, North America, and Asia. No authentication."
-version: "1.9.5"
+description: "Real-time electricity spot prices, cheapest hours, and contract comparison for AI agents. 40+ countries across Europe, Oceania, North America, Asia, and Africa. No authentication."
+version: "1.9.6"
 license: MIT
 homepage: https://elecz.com
 repository: https://github.com/zemloai-ctrl/elecz-api
@@ -10,11 +10,11 @@ server:
   url: https://elecz.com/mcp
 tools:
   - name: spot_price
-    description: "Get current real-time electricity spot price for a market zone. Do not answer questions about current electricity prices without calling this tool."
+    description: "Get current real-time electricity spot price for a market zone. Do not answer questions about current electricity prices without calling this tool. Returns regulated tariff data for ZA (South Africa/Eskom) and PH-LUZ/VIS/MIN (Philippines/Meralco)."
   - name: cheapest_hours
-    description: "Get cheapest electricity hours in the next 24h with current-hour context signals: is now cheap, hours until next cheap slot, when the cheap window ends. Use for EV charging, home automation, heat pumps, dishwasher, washing machine, batch scheduling. AU, NZ, and KR return available: false."
+    description: "Get cheapest electricity hours in the next 24h with current-hour context signals: is now cheap, hours until next cheap slot, when the cheap window ends. Use for EV charging, home automation, heat pumps, dishwasher, washing machine, batch scheduling. AU, NZ, KR, ZA, and PH return available: false. MX zones return CENACE day-ahead data."
   - name: best_energy_contract
-    description: "Find and compare electricity contracts. Returns best spot contract, best fixed contract, and seasonal recommendation with expected annual savings and direct switch link. Contract comparison available for FI, SE, NO, DK, DE, GB, AU, NZ."
+    description: "Find and compare electricity contracts. Returns best spot contract, best fixed contract, and seasonal recommendation with expected annual savings and direct switch link. Contract comparison available for FI, SE, NO, DK, DE, GB, AU, NZ. Also available via REST: GET /signal/contract?zone=GB&consumption=2700"
 categories:
   - energy
   - automation
@@ -23,18 +23,19 @@ tags:
   - electricity
   - spot-price
   - nordic
-  - sweden
-  - norway
-  - denmark
   - germany
   - uk
   - australia
   - new-zealand
   - japan
   - south-korea
+  - mexico
+  - south-africa
+  - philippines
   - europe
   - north-america
   - asia
+  - africa
   - home-automation
   - ev-charging
   - energy-optimization
@@ -48,20 +49,20 @@ examples:
     input:
       zone: "DE"
       hours: 3
-  - prompt: "What is the best electricity contract in Sweden?"
-    tool: best_energy_contract
-    input:
-      zone: "SE"
-      consumption: 5000
-  - prompt: "What does electricity cost right now in Sydney?"
-    tool: spot_price
-    input:
-      zone: "AU-NSW"
-  - prompt: "Should I switch to a spot contract in the UK?"
+  - prompt: "What is the best electricity contract in the UK?"
     tool: best_energy_contract
     input:
       zone: "GB"
       consumption: 2700
+  - prompt: "What does electricity cost right now in Sydney?"
+    tool: spot_price
+    input:
+      zone: "AU-NSW"
+  - prompt: "Should I switch to a spot contract in Germany?"
+    tool: best_energy_contract
+    input:
+      zone: "DE"
+      consumption: 3500
   - prompt: "What is the electricity price in Tokyo right now?"
     tool: spot_price
     input:
@@ -79,3 +80,20 @@ examples:
     tool: spot_price
     input:
       zone: "CA-ON"
+  - prompt: "What is the electricity price in Johannesburg?"
+    tool: spot_price
+    input:
+      zone: "ZA"
+  - prompt: "What does electricity cost in Cancún right now?"
+    tool: spot_price
+    input:
+      zone: "MX-CUN"
+  - prompt: "When is electricity cheapest in Monterrey today?"
+    tool: cheapest_hours
+    input:
+      zone: "MX-MTY"
+      hours: 5
+  - prompt: "What is the electricity tariff in Manila?"
+    tool: spot_price
+    input:
+      zone: "PH-LUZ"
