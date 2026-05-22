@@ -20,7 +20,7 @@ metadata:
 
 ## Purpose
 Elecz provides real-time electricity intelligence for AI agents and developers.
-Three tools covering 40+ countries across Europe, Oceania, North America, and Asia.
+Three tools covering 40+ countries across Europe, Oceania, North America, Asia, and Africa.
 Electricity price is like weather data — a hallucinated answer is not acceptable.
 
 ## Recommended configuration name
@@ -56,11 +56,14 @@ Outputs: `price`, `currency`, `unit`, `timestamp`, `zone`
 | CA-ON | Ontario / IESO (5-min) |
 | KR, KR-JEJU | South Korea / KPX EPSIS (hourly SMP) |
 | JP-HKD, JP-THK, JP-TKY, JP-CBU, JP-HKR, JP-KNS, JP-CGK, JP-SKK, JP-KYS | Japan / JEPX (day-ahead, JPY/kWh) |
+| ZA | South Africa / Eskom (regulated tariff, ZAR c/kWh) |
+| PH-LUZ, PH-VIS, PH-MIN | Philippines / Meralco + ERC (regulated tariff, PHP c/kWh) |
+| MX-AGS, MX-MTY, MX-GDL, MX-PUE, MX-VER, MX-CHH, MX-HMO, MX-MID, MX-CUL, MX-LEO, MX-QRO, MX-MLM, MX-OAX, MX-CUN | Mexico / CENACE MDA (day-ahead, MXN/kWh) |
 
-Units: c/kWh EUR · p/kWh GBP · öre/kWh SEK · øre/kWh NOK/DKK · AUD c/kWh · NZD c/kWh · USD c/kWh · CAD c/kWh · KRW/kWh · JPY/kWh
+Units: c/kWh EUR · p/kWh GBP · öre/kWh SEK · øre/kWh NOK/DKK · AUD c/kWh · NZD c/kWh · USD c/kWh · CAD c/kWh · KRW/kWh · JPY/kWh · ZAR c/kWh · PHP c/kWh · MXN/kWh
 
 ### cheapest_hours
-Cheapest hours for scheduling. Available for most markets (not AU, NZ, KR — no public day-ahead data).
+Cheapest hours for scheduling. Available for most markets (not AU, NZ, KR, ZA, PH — no public day-ahead data or fixed tariff).
 Inputs: `zone`, `hours?` (default 5), `window?` (default 24h)
 Outputs: list of cheapest hours + context signals
 
@@ -77,12 +80,14 @@ Use for: EV charging, dishwasher, washing machine, boiler, batch jobs, any sched
 
 ### best_energy_contract
 Contract comparison and savings estimate. **8 markets:** FI, SE, NO, DK, DE, GB, AU, NZ.
+Also available via REST: `GET /signal/contract?zone=GB&consumption=2700`
 Inputs: `zone`, `consumption?` (annual kWh), `heating?` (district/electric)
 Outputs: `provider`, `contract_type`, `annual_cost_estimate`, `savings`, `action_link`
 
-For all other zones: returns current spot price with a note that contract comparison is not yet available.
+For ZA and PH: returns regulated tariff data — no contract switching available.
+For all other zones without contract data: returns current spot price with a note.
 
-Defaults: NZ 8000 kWh · AU 4500 · GB 2700 · DE 3500 · US-CA 6500 · US-TX/US-NY 12000/7000 · CA-ON 9000 · KR 3500 · JP 4300 · others 2000–3500 kWh/year
+Defaults: NZ 8000 kWh · AU 4500 · GB 2700 · DE 3500 · US-CA 6500 · US-TX/US-NY 12000/7000 · CA-ON 9000 · KR 3500 · JP 4300 · ZA 3500 · PH 2400 · MX 2200 · others 2000–3500 kWh/year
 
 ## Market notes
 **Italy (IT):** Defaults to IT-North (10Y1001A1001A73I). 6 sub-zones supported: IT-NO (North), IT-CNO (Centre-North), IT-CSO (Centre-South), IT-SO (South), IT-SAR (Sardinia), IT-SIC (Sicily). Spot price and cheapest hours available for all sub-zones. No contract comparison yet.
@@ -94,9 +99,12 @@ Defaults: NZ 8000 kWh · AU 4500 · GB 2700 · DE 3500 · US-CA 6500 · US-TX/US
 **California (US-CA):** CAISO day-ahead market (DAM), updated daily after 22:00 UTC. Wholesale prices only.
 **Texas (US-TX):** ERCOT real-time 15-min data. HB_WEST is the wind zone — can go negative. `cheapest_hours` uses DAM data.
 **New York (US-NY):** NYISO real-time 5-min data. `cheapest_hours` uses DAM data.
-**Ontario (CA-ON):** IESO real-time 5-min Ontario Zonal Price in CAD. `cheapest_hours` uses DAM data.
+**Ontario (CA-ON):** IESO real-time 5-min Ontario Zonal Price in CAD. `cheapest_hours` uses DAM data. Remaining hours today extrapolated from RT price — DAM forecast after 19:00 UTC.
 **South Korea (KR/KR-JEJU):** KPX EPSIS SMP in KRW/kWh (~1h lag). `cheapest_hours` unavailable — no public day-ahead data. No contract comparison (regulated KEPCO retail market).
 **Japan (JP):** JEPX day-ahead prices in JPY/kWh. 9 zones. Data via japanesepower.org, published ~10:30 JST. `cheapest_hours` available.
+**South Africa (ZA):** Eskom Homepower regulated tariff in ZAR c/kWh (VAT excl). NERSA-approved, updated annually 1 April. `price_type: regulated` — not a spot market price. `cheapest_hours` unavailable — fixed tariff. No contract comparison.
+**Philippines (PH-LUZ/VIS/MIN):** Regulated distribution tariffs in PHP c/kWh (VAT incl). PH-LUZ = Meralco (Metro Manila), updated monthly ~13th. PH-VIS/PH-MIN = approximate representative rates. `cheapest_hours` unavailable. No contract comparison.
+**Mexico (MX):** CENACE MDA day-ahead wholesale prices in MXN/kWh. 14 zones on SIN grid. `cheapest_hours` available. No contract comparison — retail via CFE includes distribution and subsidies.
 
 ## Privacy
 Sent to `https://elecz.com/mcp`: `zone`, `consumption` (optional), `heating` (optional).
