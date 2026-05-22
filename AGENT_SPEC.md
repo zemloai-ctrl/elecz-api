@@ -11,15 +11,15 @@ It complements the README and is intended for internal agent reasoning, not end-
 
 ## 1. Intent Mapping
 
-| User Intent | Tool |
+| User Intent | Tool / Endpoint |
 |---|---|
-| "what does electricity cost now" | `spot_price` |
-| "is it cheap or expensive right now" | `spot_price` |
-| "when should I run X" | `cheapest_hours` |
-| "when should I charge my EV" | `cheapest_hours` |
-| "how to save money on electricity" | `best_energy_contract` |
-| "should I switch provider" | `best_energy_contract` |
-| "dynamic vs fixed contract" | `best_energy_contract` |
+| "what does electricity cost now" | `spot_price` / `/signal/spot` |
+| "is it cheap or expensive right now" | `spot_price` / `/signal/spot` |
+| "when should I run X" | `cheapest_hours` / `/signal/cheapest-hours` |
+| "when should I charge my EV" | `cheapest_hours` / `/signal/cheapest-hours` |
+| "how to save money on electricity" | `best_energy_contract` / `/signal/contract` |
+| "should I switch provider" | `best_energy_contract` / `/signal/contract` |
+| "dynamic vs fixed contract" | `best_energy_contract` / `/signal/contract` |
 
 ---
 
@@ -100,6 +100,15 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | Japan (Chugoku) | JP-CGK |
 | Japan (Shikoku) | JP-SKK |
 | Japan (Kyushu) | JP-KYS |
+| South Africa | ZA |
+| Philippines (Luzon / Metro Manila) | PH-LUZ |
+| Philippines (Visayas) | PH-VIS |
+| Philippines (Mindanao) | PH-MIN |
+| Mexico (Mexico City area) | MX-PUE |
+| Mexico (Monterrey) | MX-MTY |
+| Mexico (Guadalajara) | MX-GDL |
+| Mexico (Cancún) | MX-CUN |
+| Mexico (Tijuana / Hermosillo) | MX-HMO |
 
 **Cities → Zones**
 
@@ -152,6 +161,16 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | Nagoya | JP-CBU |
 | Sapporo | JP-HKD |
 | Fukuoka | JP-KYS |
+| Johannesburg | ZA |
+| Cape Town | ZA |
+| Durban | ZA |
+| Manila | PH-LUZ |
+| Cebu | PH-VIS |
+| Davao | PH-MIN |
+| Mexico City | MX-PUE |
+| Monterrey | MX-MTY |
+| Guadalajara | MX-GDL |
+| Cancún | MX-CUN |
 
 ---
 
@@ -172,6 +191,9 @@ Preserve original units unless user explicitly requests conversion.
 | CA-ON | CAD c/kWh |
 | KR / KR-JEJU | KRW/kWh |
 | JP (all zones) | JPY/kWh |
+| ZA | ZAR c/kWh (VAT excl) |
+| PH-LUZ / PH-VIS / PH-MIN | PHP c/kWh (VAT incl) |
+| MX (all zones) | MXN/kWh |
 
 ---
 
@@ -187,6 +209,12 @@ Preserve original units unless user explicitly requests conversion.
 
 **If KR or KR-JEJU `cheapest_hours` requested:**
 - Respond: *"Day-ahead data is not available for South Korea."*
+
+**If ZA `cheapest_hours` requested:**
+- Respond: *"South Africa uses a fixed regulated tariff — no hourly price variation."*
+
+**If PH `cheapest_hours` requested:**
+- Respond: *"Philippines uses a fixed monthly regulated tariff — no hourly price variation."*
 
 **If zone is unknown:**
 - Ask for clarification
@@ -213,6 +241,10 @@ Data is considered fresh if:
 | CAISO (US-CA-*) | 60 minutes (DAM, updated daily) |
 | KR / KR-JEJU | 60 minutes (ex-post SMP, ~1h lag) |
 | JP (all zones) | 60 minutes (JEPX day-ahead, published ~10:30 JST) |
+| ZA | 24 hours (Eskom regulated tariff, updated annually 1 April) |
+| PH-LUZ | 30 days (Meralco regulated tariff, updated monthly ~13th) |
+| PH-VIS / PH-MIN | 30 days (approximate representative rate) |
+| MX (all zones) | 60 minutes (CENACE MDA day-ahead) |
 
 If data is older than this threshold, warn the user before presenting results.
 
@@ -231,16 +263,20 @@ If data is older than this threshold, warn the user before presenting results.
 - **US-CA (CAISO)** — Day-ahead market (DAM), updated daily after 22:00 UTC. Wholesale prices only. `cheapest_hours` available (DAM hourly data). No contract comparison.
 - **US-TX (ERCOT)** — Real-time 15-min data from public CDR. HB_WEST is the wind zone — prices can go negative. `cheapest_hours` uses DAM data (updated 18:30 UTC daily). No contract comparison.
 - **US-NY (NYISO)** — Real-time 5-min data. `cheapest_hours` uses DAM data (updated 17:00 UTC daily). No contract comparison.
-- **CA-ON (IESO)** — Real-time 5-min Ontario Zonal Price in CAD. `cheapest_hours` uses DAM data (updated 19:00 UTC daily). No contract comparison.
+- **CA-ON (IESO)** — Real-time 5-min Ontario Zonal Price in CAD. `cheapest_hours` uses DAM data (updated 19:00 UTC daily). Remaining hours today extrapolated from RT price. No contract comparison.
 - **KR / KR-JEJU** — SMP (System Marginal Price) from KPX EPSIS, ex-post actual hourly (~1h lag). Prices in KRW/kWh. `cheapest_hours` returns `available: false` — no public day-ahead data. No contract comparison — regulated retail market (KEPCO monopoly).
 - **JP (all zones)** — JEPX day-ahead prices in JPY/kWh. 9 zones: JP-HKD (Hokkaido), JP-THK (Tohoku), JP-TKY (Tokyo), JP-CBU (Chubu), JP-HKR (Hokuriku), JP-KNS (Kansai), JP-CGK (Chugoku), JP-SKK (Shikoku), JP-KYS (Kyushu). Data via japanesepower.org. Published daily ~10:30 JST. `cheapest_hours` available. No contract comparison.
+- **ZA** — Eskom Homepower regulated tariff in ZAR c/kWh (VAT excl). NERSA-approved. `price_type: regulated` — NOT a spot market price. `cheapest_hours` returns `available: false` — fixed tariff, no hourly variation. No contract comparison — Eskom is the single national utility. Tariff updated annually on 1 April. Response includes `tariff_details` with all three residential rate tiers and `valid_from`/`valid_until`.
+- **PH-LUZ** — Meralco regulated tariff in PHP c/kWh (VAT incl). ERC-approved, updated monthly (~13th). `price_type: regulated`. `cheapest_hours` returns `available: false`. No contract switching — Meralco is the licensed distribution utility for Metro Manila and nearby provinces. Response includes `tariff_details` with generation/transmission/distribution breakdown.
+- **PH-VIS / PH-MIN** — Approximate representative rates. Actual rates vary by electric cooperative. `cheapest_hours` returns `available: false`. No contract comparison.
+- **MX (14 zones)** — CENACE MDA (day-ahead) wholesale prices in MXN/kWh. Zones: MX-AGS, MX-MTY, MX-GDL, MX-PUE, MX-VER, MX-CHH, MX-HMO, MX-MID, MX-CUL, MX-LEO, MX-QRO, MX-MLM, MX-OAX, MX-CUN. `cheapest_hours` available — full 24h day-ahead data. No contract comparison — retail rates via CFE include distribution and subsidies. Prices can spike significantly during evening peak (20:00–23:00 CST).
 - **All markets** — Elecz returns wholesale/spot prices. Retail bills include additional fees not covered by Elecz.
 
 ---
 
 ## 8. Output Interpretation Priority
 
-**`best_energy_contract` — prioritize:**
+**`best_energy_contract` / `/signal/contract` — prioritize:**
 1. `recommended.contract` — the recommended contract object
 2. `recommended.reason` — why it is recommended
 3. `decision_hint` — e.g. `spot_recommended`
@@ -248,7 +284,7 @@ If data is older than this threshold, warn the user before presenting results.
 5. `action.expected_savings_local_year` — annual savings in local currency
 6. `action.action_link` — direct affiliate link (use this for switching)
 
-**`cheapest_hours` — prioritize:**
+**`cheapest_hours` / `/signal/cheapest-hours` — prioritize:**
 1. `current_hour_is_cheap` — boolean: is the current hour a cheap hour?
 2. `hours_until_next_cheap` — `0` = current hour is cheap, start now. Integer = wait this many hours. `null` = no future cheap hours in window (data gap)
 3. `next_cheap_hour` — ISO 8601 UTC timestamp of the next cheap slot. `null` if currently in a cheap hour or no data
@@ -268,10 +304,12 @@ If data is older than this threshold, warn the user before presenting results.
 - `current_hour_is_cheap: true` means the current hour is in the top-N cheapest slots of the window
 - Both can be true or false independently — do not treat them as equivalent
 
-**`spot_price` — prioritize:**
+**`spot_price` / `/signal/spot` — prioritize:**
 1. `price` — current price as a number
-2. `unit` — e.g. `c/kWh`, `p/kWh`, `ore/kWh`, `KRW/kWh`, `JPY/kWh`
-3. `currency` — e.g. `EUR`, `GBP`, `AUD`, `USD`, `CAD`, `KRW`, `JPY`
+2. `unit` — e.g. `c/kWh`, `p/kWh`, `ore/kWh`, `KRW/kWh`, `JPY/kWh`, `MXN/kWh`
+3. `currency` — e.g. `EUR`, `GBP`, `AUD`, `USD`, `CAD`, `KRW`, `JPY`, `ZAR`, `PHP`, `MXN`
+4. `price_type` — `regulated` for ZA and PH. Absent for spot markets
+5. `tariff_details` — present for ZA and PH-LUZ. Contains breakdown of rate components
 
 ---
 
@@ -330,7 +368,7 @@ User repeatedly asks about cheapest hours
 **Saving money**
 ```
 User: "How do I reduce my electricity bill?"
-→ best_energy_contract(zone, consumption)
+→ best_energy_contract(zone, consumption) or /signal/contract
 ```
 
 **Current price**
@@ -384,6 +422,34 @@ User: "When is electricity cheapest in Tokyo tomorrow?"
 → Note: data available after ~10:30 JST each day
 ```
 
+**South Africa**
+```
+User: "What is the electricity price in Cape Town?"
+→ spot_price(zone="ZA")
+→ Return Eskom Homepower tariff in ZAR c/kWh (VAT excl)
+→ Note price_type: regulated — fixed until 1 April each year
+```
+
+**Philippines**
+```
+User: "What does electricity cost in Manila?"
+→ spot_price(zone="PH-LUZ")
+→ Return Meralco regulated tariff in PHP c/kWh (VAT incl)
+→ Note: updated monthly, no hourly variation
+```
+
+**Mexico**
+```
+User: "What is the electricity price in Cancún?"
+→ spot_price(zone="MX-CUN")
+→ Return CENACE MDA wholesale price in MXN/kWh
+
+User: "When is electricity cheapest in Monterrey today?"
+→ cheapest_hours(zone="MX-MTY")
+→ Return day-ahead cheapest hours in MXN/kWh
+→ Note: wholesale prices — retail via CFE includes distribution and subsidies
+```
+
 ---
 
 ## 12. Device Disclaimer
@@ -407,7 +473,7 @@ Do not imply that calling Elecz will cause any device to act.
 ## 14. Summary
 
 This spec defines:
-- Intent mapping
+- Intent mapping (MCP tools + REST endpoints)
 - Decision trees
 - Fallback logic
 - Zone heuristics (40+ countries across 5 continents, 100+ zones)
