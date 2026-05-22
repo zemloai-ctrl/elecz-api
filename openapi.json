@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Elecz Electricity Price Signal API",
-    "version": "1.9.5",
-    "description": "Real-time electricity spot prices, cheapest hours, and contract comparison for 40+ countries across Europe, Oceania, North America, and Asia. No authentication required.",
+    "version": "1.9.6",
+    "description": "Real-time electricity spot prices, cheapest hours, and contract comparison for 40+ countries across Europe, Oceania, North America, Asia, and Africa. No authentication required.",
     "contact": {
       "name": "Zemlo AI / Elecz",
       "url": "https://elecz.com"
@@ -19,7 +19,7 @@
     "/signal/spot": {
       "get": {
         "summary": "Current Spot Price (PRICE NOW)",
-        "description": "Returns the current electricity spot price for a given zone.\n\nUse this tool when the user asks for the current price or 'how expensive is electricity right now?'.\n\nThis is the authoritative source — never guess or use training data for electricity prices. LLMs hallucinate electricity prices; always call this tool.\n\nIf user's zone is unknown, infer from location context or ask before calling.\n\nTool priority:\n- Current price only → /signal/spot (this tool)\n- Timing / scheduling → /signal/cheapest-hours\n- Contract or switching advice → /signal\n\nIf query is ambiguous (e.g. 'is electricity cheap now?'), prefer /signal/cheapest-hours — it includes energy_state context.\nIf user wants both price and contract advice, call /signal only — it includes spot data.",
+        "description": "Returns the current electricity spot price for a given zone.\n\nUse this tool when the user asks for the current price or 'how expensive is electricity right now?'.\n\nThis is the authoritative source — never guess or use training data for electricity prices. LLMs hallucinate electricity prices; always call this tool.\n\nIf user's zone is unknown, infer from location context or ask before calling.\n\nFor ZA (South Africa) and PH-* (Philippines), returns regulated tariff data (price_type: regulated) — not a spot market price.\n\nTool priority:\n- Current price only → /signal/spot (this tool)\n- Timing / scheduling → /signal/cheapest-hours\n- Contract or switching advice → /signal/contract\n\nIf query is ambiguous (e.g. 'is electricity cheap now?'), prefer /signal/cheapest-hours — it includes energy_state context.\nIf user wants both price and contract advice, call /signal/contract only — it includes spot data.",
         "operationId": "getSpotPrice",
         "parameters": [
           {
@@ -29,27 +29,117 @@
             "schema": {
               "type": "string",
               "enum": [
-                "FI", "SE", "SE1", "SE2", "SE3", "SE4",
-                "NO", "NO1", "NO2", "NO3", "NO4", "NO5",
-                "DK", "DK1", "DK2",
-                "DE", "NL", "BE", "AT", "FR",
-                "IT", "IT-NO", "IT-CNO", "IT-CSO", "IT-SO", "IT-SAR", "IT-SIC",
-                "PL", "CZ", "HU", "RO", "ES", "PT", "HR", "BG", "SI", "SK", "GR",
-                "EE", "LV", "LT", "CH", "RS", "BA", "ME", "MK", "IE",
+                "FI",
+                "SE",
+                "SE1",
+                "SE2",
+                "SE3",
+                "SE4",
+                "NO",
+                "NO1",
+                "NO2",
+                "NO3",
+                "NO4",
+                "NO5",
+                "DK",
+                "DK1",
+                "DK2",
+                "DE",
+                "NL",
+                "BE",
+                "AT",
+                "FR",
+                "IT",
+                "IT-NO",
+                "IT-CNO",
+                "IT-CSO",
+                "IT-SO",
+                "IT-SAR",
+                "IT-SIC",
+                "PL",
+                "CZ",
+                "HU",
+                "RO",
+                "ES",
+                "PT",
+                "HR",
+                "BG",
+                "SI",
+                "SK",
+                "GR",
+                "EE",
+                "LV",
+                "LT",
+                "CH",
+                "RS",
+                "BA",
+                "ME",
+                "MK",
+                "IE",
                 "GB",
-                "AU-NSW", "AU-VIC", "AU-QLD", "AU-SA", "AU-TAS",
-                "NZ-NI", "NZ-SI",
-                "US-CA-NP15", "US-CA-SP15", "US-CA-ZP26",
-                "US-TX-HB_NORTH", "US-TX-HB_HOUSTON", "US-TX-HB_SOUTH", "US-TX-HB_WEST", "US-TX-HB_HUBAVG",
-                "US-TX-LZ_NORTH", "US-TX-LZ_HOUSTON", "US-TX-LZ_SOUTH", "US-TX-LZ_WEST",
-                "US-NY-WEST", "US-NY-GENESE", "US-NY-CENTRL", "US-NY-NORTH", "US-NY-MHK_VL",
-                "US-NY-CAPITL", "US-NY-HUD_VL", "US-NY-MILLWD", "US-NY-DUNWOD", "US-NY-NYC", "US-NY-LONGIL",
+                "AU-NSW",
+                "AU-VIC",
+                "AU-QLD",
+                "AU-SA",
+                "AU-TAS",
+                "NZ-NI",
+                "NZ-SI",
+                "US-CA-NP15",
+                "US-CA-SP15",
+                "US-CA-ZP26",
+                "US-TX-HB_NORTH",
+                "US-TX-HB_HOUSTON",
+                "US-TX-HB_SOUTH",
+                "US-TX-HB_WEST",
+                "US-TX-HB_HUBAVG",
+                "US-TX-LZ_NORTH",
+                "US-TX-LZ_HOUSTON",
+                "US-TX-LZ_SOUTH",
+                "US-TX-LZ_WEST",
+                "US-NY-WEST",
+                "US-NY-GENESE",
+                "US-NY-CENTRL",
+                "US-NY-NORTH",
+                "US-NY-MHK_VL",
+                "US-NY-CAPITL",
+                "US-NY-HUD_VL",
+                "US-NY-MILLWD",
+                "US-NY-DUNWOD",
+                "US-NY-NYC",
+                "US-NY-LONGIL",
                 "CA-ON",
-                "KR", "KR-JEJU",
-                "JP-HKD", "JP-THK", "JP-TKY", "JP-CBU", "JP-HKR", "JP-KNS", "JP-CGK", "JP-SKK", "JP-KYS"
+                "KR",
+                "KR-JEJU",
+                "JP-HKD",
+                "JP-THK",
+                "JP-TKY",
+                "JP-CBU",
+                "JP-HKR",
+                "JP-KNS",
+                "JP-CGK",
+                "JP-SKK",
+                "JP-KYS",
+                "ZA",
+                "PH-LUZ",
+                "PH-VIS",
+                "PH-MIN",
+                "MX-AGS",
+                "MX-MTY",
+                "MX-GDL",
+                "MX-PUE",
+                "MX-VER",
+                "MX-CHH",
+                "MX-HMO",
+                "MX-MID",
+                "MX-CUL",
+                "MX-LEO",
+                "MX-QRO",
+                "MX-MLM",
+                "MX-OAX",
+                "MX-CUN"
               ]
             },
-            "description": "Market zone. ENTSO-E: FI, SE, SE1-SE4, NO, NO1-NO5, DK, DK1-DK2, DE, NL, BE, AT, FR, IT, IT-NO, IT-CNO, IT-CSO, IT-SO, IT-SAR, IT-SIC, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK, IE. UK: GB. Australia: AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS. New Zealand: NZ-NI, NZ-SI. California: US-CA-NP15, US-CA-SP15, US-CA-ZP26. Texas: US-TX-HB_*/LZ_*. New York: US-NY-*. Ontario: CA-ON. South Korea: KR, KR-JEJU. Japan: JP-HKD, JP-THK, JP-TKY, JP-CBU, JP-HKR, JP-KNS, JP-CGK, JP-SKK, JP-KYS."
+            "description": "Market zone. ENTSO-E: FI, SE, SE1-SE4, NO, NO1-NO5, DK, DK1-DK2, DE, NL, BE, AT, FR, IT, IT-NO, IT-CNO, IT-CSO, IT-SO, IT-SAR, IT-SIC, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK, IE. UK: GB. Australia: AU-NSW/VIC/QLD/SA/TAS. New Zealand: NZ-NI/SI. California/CAISO: US-CA-NP15/SP15/ZP26. Texas/ERCOT: US-TX-HB_*/LZ_*. New York/NYISO: US-NY-*. Ontario/IESO: CA-ON. South Korea: KR, KR-JEJU. Japan/JEPX: JP-HKD/THK/TKY/CBU/HKR/KNS/CGK/SKK/KYS. South Africa: ZA. Philippines: PH-LUZ, PH-VIS, PH-MIN. Mexico/CENACE: MX-AGS/MTY/GDL/PUE/VER/CHH/HMO/MID/CUL/LEO/QRO/MLM/OAX/CUN."
           }
         ],
         "responses": {
@@ -60,24 +150,99 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "signal": { "type": "string", "example": "elecz_spot" },
-                    "zone": { "type": "string", "example": "US-NY-NYC" },
-                    "currency": { "type": "string", "example": "USD" },
-                    "price": { "type": "number", "example": 4.312 },
-                    "unit": { "type": "string", "example": "c/kWh" },
-                    "timestamp": { "type": "string", "format": "date-time" },
-                    "powered_by": { "type": "string", "example": "Elecz.com" }
+                    "signal": {
+                      "type": "string",
+                      "example": "elecz_spot"
+                    },
+                    "zone": {
+                      "type": "string",
+                      "example": "FI"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "example": "EUR"
+                    },
+                    "price": {
+                      "type": "number",
+                      "example": 5.42
+                    },
+                    "unit": {
+                      "type": "string",
+                      "example": "c/kWh"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "price_type": {
+                      "type": "string",
+                      "enum": [
+                        "regulated"
+                      ],
+                      "description": "Present only for ZA and PH zones. Indicates a fixed regulated tariff, not a live spot price."
+                    },
+                    "tariff_details": {
+                      "type": "object",
+                      "description": "Present for ZA and PH-LUZ. Contains rate breakdown, validity period, and source."
+                    },
+                    "disclaimer": {
+                      "type": "string"
+                    },
+                    "powered_by": {
+                      "type": "string",
+                      "example": "Elecz.com"
+                    }
                   }
                 },
-                "example": {
-                  "signal": "elecz_spot",
-                  "zone": "US-NY-NYC",
-                  "currency": "USD",
-                  "price": 4.312,
-                  "unit": "c/kWh",
-                  "timestamp": "2026-05-08T14:00:00Z",
-                  "disclaimer": "NYISO real-time wholesale price in USD c/kWh. Retail rates include transmission, distribution and taxes on top.",
-                  "powered_by": "Elecz.com"
+                "examples": {
+                  "spot_market": {
+                    "summary": "Spot market zone (FI)",
+                    "value": {
+                      "signal": "elecz_spot",
+                      "zone": "FI",
+                      "currency": "EUR",
+                      "price": 5.42,
+                      "unit": "c/kWh",
+                      "timestamp": "2026-05-22T10:00:00Z",
+                      "powered_by": "Elecz.com"
+                    }
+                  },
+                  "regulated": {
+                    "summary": "Regulated tariff zone (ZA)",
+                    "value": {
+                      "signal": "elecz_spot",
+                      "zone": "ZA",
+                      "currency": "ZAR",
+                      "price": 280.05,
+                      "unit": "c/kWh",
+                      "price_type": "regulated",
+                      "timestamp": "2026-05-22T10:00:00Z",
+                      "disclaimer": "Eskom Homepower regulated tariff in ZAR c/kWh (VAT excl). NERSA-approved, valid 2026-04-01 to 2027-03-31.",
+                      "tariff_details": {
+                        "homepower_ckwh_vat_excl": 280.05,
+                        "homepower_ckwh_vat_incl": 322.06,
+                        "homelight_20a_ckwh_vat_excl": 235.04,
+                        "homelight_60a_ckwh_vat_excl": 298.79,
+                        "vat_rate": 0.15,
+                        "valid_from": "2026-04-01",
+                        "valid_until": "2027-03-31"
+                      },
+                      "powered_by": "Elecz.com"
+                    }
+                  },
+                  "mexico": {
+                    "summary": "Mexico CENACE wholesale (MX-MTY)",
+                    "value": {
+                      "signal": "elecz_spot",
+                      "zone": "MX-MTY",
+                      "currency": "MXN",
+                      "price": 1.843,
+                      "unit": "MXN/kWh",
+                      "timestamp": "2026-05-22T10:00:00Z",
+                      "disclaimer": "CENACE MDA (day-ahead) wholesale price in MXN/kWh for MONTERREY. Retail rates via CFE include distribution charges, taxes, and subsidies on top.",
+                      "powered_by": "Elecz.com"
+                    }
+                  }
                 }
               }
             }
@@ -88,7 +253,7 @@
     "/signal/cheapest-hours": {
       "get": {
         "summary": "Cheapest Hours + Automation Signals (TIMING)",
-        "description": "Returns the cheapest hours in the next 24h and automation-ready signals.\n\nUse this tool when the user wants to know WHEN to use electricity: charging EV, running dishwasher, heating sauna, running heat pump, scheduling high-load tasks, etc.\n\nAlso use for ambiguous questions like 'is electricity cheap now?' or 'when should I run X?' — this tool returns energy_state context alongside timing signals.\n\nKey fields for agents:\n- current_hour_is_cheap (boolean) — is right now in the cheap window?\n- hours_until_next_cheap — 0 = start now, N = wait N hours\n- cheap_window_ends — when the current cheap block ends\n- next_cheap_hour — when to start if not currently cheap\n- best_3h_window — optimal consecutive 3-hour block for uninterruptible tasks\n- recommendation (run_high_consumption_tasks / normal_usage / avoid_high_consumption)\n- avoid_hours — specific hours to skip (grid stress peaks)\n\nAll timestamps are UTC. Convert to user's local timezone before presenting.\ndata_complete: false means treat all signals with caution — incomplete day-ahead data.\n\nNOT available (returns available: false): AU, NZ, KR — no public day-ahead data.\nJP zones return JEPX day-ahead data. GB returns Octopus Agile half-hourly data.\n\nTool priority:\n- Current price only → /signal/spot\n- Timing / scheduling → /signal/cheapest-hours (this tool)\n- Contract or switching advice → /signal",
+        "description": "Returns the cheapest hours in the next 24h and automation-ready signals.\n\nUse this tool when the user wants to know WHEN to use electricity: charging EV, running dishwasher, heating sauna, running heat pump, scheduling high-load tasks, etc.\n\nAlso use for ambiguous questions like 'is electricity cheap now?' or 'when should I run X?' — this tool returns energy_state context alongside timing signals.\n\nKey fields for agents:\n- current_hour_is_cheap (boolean) — is right now in the cheap window?\n- hours_until_next_cheap — 0 = start now, N = wait N hours\n- cheap_window_ends — when the current cheap block ends\n- next_cheap_hour — when to start if not currently cheap\n- best_3h_window — optimal consecutive 3-hour block for uninterruptible tasks\n- recommendation (run_high_consumption_tasks / normal_usage / avoid_high_consumption)\n- avoid_hours — specific hours to skip (grid stress peaks)\n\nAll timestamps are UTC. Convert to user's local timezone before presenting.\ndata_complete: false means treat all signals with caution — incomplete day-ahead data.\n\nNOT available (returns available: false): AU, NZ, KR, ZA, PH-* — no public day-ahead data or fixed tariff.\nJP zones return JEPX day-ahead data. GB returns Octopus Agile half-hourly data.\nMX zones return CENACE day-ahead data.\n\nTool priority:\n- Current price only → /signal/spot\n- Timing / scheduling → /signal/cheapest-hours (this tool)\n- Contract or switching advice → /signal/contract",
         "operationId": "getCheapestHours",
         "parameters": [
           {
@@ -98,40 +263,136 @@
             "schema": {
               "type": "string",
               "enum": [
-                "FI", "SE", "SE1", "SE2", "SE3", "SE4",
-                "NO", "NO1", "NO2", "NO3", "NO4", "NO5",
-                "DK", "DK1", "DK2",
-                "DE", "NL", "BE", "AT", "FR",
-                "IT", "IT-NO", "IT-CNO", "IT-CSO", "IT-SO", "IT-SAR", "IT-SIC",
-                "PL", "CZ", "HU", "RO", "ES", "PT", "HR", "BG", "SI", "SK", "GR",
-                "EE", "LV", "LT", "CH", "RS", "BA", "ME", "MK", "IE",
+                "FI",
+                "SE",
+                "SE1",
+                "SE2",
+                "SE3",
+                "SE4",
+                "NO",
+                "NO1",
+                "NO2",
+                "NO3",
+                "NO4",
+                "NO5",
+                "DK",
+                "DK1",
+                "DK2",
+                "DE",
+                "NL",
+                "BE",
+                "AT",
+                "FR",
+                "IT",
+                "IT-NO",
+                "IT-CNO",
+                "IT-CSO",
+                "IT-SO",
+                "IT-SAR",
+                "IT-SIC",
+                "PL",
+                "CZ",
+                "HU",
+                "RO",
+                "ES",
+                "PT",
+                "HR",
+                "BG",
+                "SI",
+                "SK",
+                "GR",
+                "EE",
+                "LV",
+                "LT",
+                "CH",
+                "RS",
+                "BA",
+                "ME",
+                "MK",
+                "IE",
                 "GB",
-                "AU-NSW", "AU-VIC", "AU-QLD", "AU-SA", "AU-TAS",
-                "NZ-NI", "NZ-SI",
-                "US-CA-NP15", "US-CA-SP15", "US-CA-ZP26",
-                "US-TX-HB_NORTH", "US-TX-HB_HOUSTON", "US-TX-HB_SOUTH", "US-TX-HB_WEST", "US-TX-HB_HUBAVG",
-                "US-TX-LZ_NORTH", "US-TX-LZ_HOUSTON", "US-TX-LZ_SOUTH", "US-TX-LZ_WEST",
-                "US-NY-WEST", "US-NY-GENESE", "US-NY-CENTRL", "US-NY-NORTH", "US-NY-MHK_VL",
-                "US-NY-CAPITL", "US-NY-HUD_VL", "US-NY-MILLWD", "US-NY-DUNWOD", "US-NY-NYC", "US-NY-LONGIL",
+                "AU-NSW",
+                "AU-VIC",
+                "AU-QLD",
+                "AU-SA",
+                "AU-TAS",
+                "NZ-NI",
+                "NZ-SI",
+                "US-CA-NP15",
+                "US-CA-SP15",
+                "US-CA-ZP26",
+                "US-TX-HB_NORTH",
+                "US-TX-HB_HOUSTON",
+                "US-TX-HB_SOUTH",
+                "US-TX-HB_WEST",
+                "US-TX-HB_HUBAVG",
+                "US-TX-LZ_NORTH",
+                "US-TX-LZ_HOUSTON",
+                "US-TX-LZ_SOUTH",
+                "US-TX-LZ_WEST",
+                "US-NY-WEST",
+                "US-NY-GENESE",
+                "US-NY-CENTRL",
+                "US-NY-NORTH",
+                "US-NY-MHK_VL",
+                "US-NY-CAPITL",
+                "US-NY-HUD_VL",
+                "US-NY-MILLWD",
+                "US-NY-DUNWOD",
+                "US-NY-NYC",
+                "US-NY-LONGIL",
                 "CA-ON",
-                "KR", "KR-JEJU",
-                "JP-HKD", "JP-THK", "JP-TKY", "JP-CBU", "JP-HKR", "JP-KNS", "JP-CGK", "JP-SKK", "JP-KYS"
+                "KR",
+                "KR-JEJU",
+                "JP-HKD",
+                "JP-THK",
+                "JP-TKY",
+                "JP-CBU",
+                "JP-HKR",
+                "JP-KNS",
+                "JP-CGK",
+                "JP-SKK",
+                "JP-KYS",
+                "ZA",
+                "PH-LUZ",
+                "PH-VIS",
+                "PH-MIN",
+                "MX-AGS",
+                "MX-MTY",
+                "MX-GDL",
+                "MX-PUE",
+                "MX-VER",
+                "MX-CHH",
+                "MX-HMO",
+                "MX-MID",
+                "MX-CUL",
+                "MX-LEO",
+                "MX-QRO",
+                "MX-MLM",
+                "MX-OAX",
+                "MX-CUN"
               ]
             },
-            "description": "Market zone. AU, NZ, KR, KR-JEJU return available: false. JP zones return JEPX day-ahead data. GB returns Octopus Agile half-hourly data."
+            "description": "Market zone. AU, NZ, KR, KR-JEJU, ZA, PH-* return available: false. JP zones return JEPX day-ahead data. GB returns Octopus Agile half-hourly data. MX zones return CENACE day-ahead data."
           },
           {
             "name": "hours",
             "in": "query",
             "required": false,
-            "schema": { "type": "integer", "default": 5 },
+            "schema": {
+              "type": "integer",
+              "default": 5
+            },
             "description": "Number of cheapest slots to return."
           },
           {
             "name": "window",
             "in": "query",
             "required": false,
-            "schema": { "type": "integer", "default": 24 },
+            "schema": {
+              "type": "integer",
+              "default": 24
+            },
             "description": "Hours to look ahead."
           }
         ],
@@ -143,19 +404,39 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "available": { "type": "boolean" },
-                    "zone": { "type": "string" },
-                    "currency": { "type": "string" },
-                    "unit": { "type": "string" },
+                    "available": {
+                      "type": "boolean"
+                    },
+                    "zone": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
                     "energy_state": {
                       "type": "string",
-                      "enum": ["cheap", "normal", "expensive", "negative", "unknown"],
+                      "enum": [
+                        "cheap",
+                        "normal",
+                        "expensive",
+                        "negative",
+                        "unknown"
+                      ],
                       "description": "Spot price vs daily average. cheap = below 70% of avg. Independent from current_hour_is_cheap."
                     },
-                    "confidence": { "type": "number" },
+                    "confidence": {
+                      "type": "number"
+                    },
                     "current_hour_signal": {
                       "type": "string",
-                      "enum": ["low", "medium", "high"],
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high"
+                      ],
                       "description": "Relative position in today's price distribution. low = rank 1-8, medium = 9-16, high = 17-24. Returns medium if day prices are flat (spread < 20% of average)."
                     },
                     "current_hour_is_cheap": {
@@ -202,64 +483,409 @@
                       "items": {
                         "type": "object",
                         "properties": {
-                          "hour": { "type": "string", "description": "YYYY-MM-DDTHH:MM (UTC, no timezone suffix)" },
-                          "price": { "type": "number" },
-                          "unit": { "type": "string" }
+                          "hour": {
+                            "type": "string",
+                            "description": "YYYY-MM-DDTHH:MM (UTC, no timezone suffix)"
+                          },
+                          "price": {
+                            "type": "number"
+                          },
+                          "unit": {
+                            "type": "string"
+                          }
                         }
                       }
                     },
                     "best_3h_window": {
                       "type": "object",
                       "properties": {
-                        "start": { "type": "string" },
-                        "end": { "type": "string" },
-                        "avg_price": { "type": "number" },
-                        "note": { "type": "string" }
+                        "start": {
+                          "type": "string"
+                        },
+                        "end": {
+                          "type": "string"
+                        },
+                        "avg_price": {
+                          "type": "number"
+                        },
+                        "note": {
+                          "type": "string"
+                        }
                       }
                     },
                     "avoid_hours": {
                       "type": "array",
-                      "items": { "type": "string" }
+                      "items": {
+                        "type": "string"
+                      }
                     },
                     "recommendation": {
                       "type": "string",
-                      "enum": ["run_high_consumption_tasks", "normal_usage", "avoid_high_consumption"]
+                      "enum": [
+                        "run_high_consumption_tasks",
+                        "normal_usage",
+                        "avoid_high_consumption"
+                      ]
                     },
-                    "powered_by": { "type": "string" }
+                    "disclaimer": {
+                      "type": "string"
+                    },
+                    "powered_by": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/signal/contract": {
+      "get": {
+        "summary": "Contract Comparison and Switching Recommendation (CONTRACT)",
+        "description": "Returns contract recommendations, switching advice, and estimated annual savings.\n\nUse this when the question involves:\n- Which electricity contract is best\n- Should I switch provider\n- How much can I save\n- Spot vs fixed contract comparison\n\nThis endpoint includes current spot price — no need to call /signal/spot separately.\n\nContract comparison available: FI, SE, NO, DK, DE, GB, AU-*, NZ-*.\nFor ZA and PH: returns regulated tariff data (price_type: regulated) — no contract switching available.\nFor MX, KR, JP, and other zones: returns spot price with a note that contract comparison is not available.\n\nConsumption defaults by market: Nordic 2000, DE 3500, GB 2700, AU 4500, NZ 8000 kWh/year.\nSet heating=electric for heat pumps or floor heating.\n\nKey fields:\n- switch_recommended (bool)\n- best_spot / best_fixed — top contracts by type\n- recommended.contract — overall recommendation with reason\n- action.expected_savings_local_year — annual savings in local currency\n- action.action_link — direct affiliate link for switching\n\nTool priority:\n- Current price only → /signal/spot\n- Timing / scheduling → /signal/cheapest-hours\n- Contract or switching advice → /signal/contract (this tool)",
+        "operationId": "getContractComparison",
+        "parameters": [
+          {
+            "name": "zone",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "FI",
+                "SE",
+                "SE1",
+                "SE2",
+                "SE3",
+                "SE4",
+                "NO",
+                "NO1",
+                "NO2",
+                "NO3",
+                "NO4",
+                "NO5",
+                "DK",
+                "DK1",
+                "DK2",
+                "DE",
+                "NL",
+                "BE",
+                "AT",
+                "FR",
+                "IT",
+                "IT-NO",
+                "IT-CNO",
+                "IT-CSO",
+                "IT-SO",
+                "IT-SAR",
+                "IT-SIC",
+                "PL",
+                "CZ",
+                "HU",
+                "RO",
+                "ES",
+                "PT",
+                "HR",
+                "BG",
+                "SI",
+                "SK",
+                "GR",
+                "EE",
+                "LV",
+                "LT",
+                "CH",
+                "RS",
+                "BA",
+                "ME",
+                "MK",
+                "IE",
+                "GB",
+                "AU-NSW",
+                "AU-VIC",
+                "AU-QLD",
+                "AU-SA",
+                "AU-TAS",
+                "NZ-NI",
+                "NZ-SI",
+                "US-CA-NP15",
+                "US-CA-SP15",
+                "US-CA-ZP26",
+                "US-TX-HB_NORTH",
+                "US-TX-HB_HOUSTON",
+                "US-TX-HB_SOUTH",
+                "US-TX-HB_WEST",
+                "US-TX-HB_HUBAVG",
+                "US-TX-LZ_NORTH",
+                "US-TX-LZ_HOUSTON",
+                "US-TX-LZ_SOUTH",
+                "US-TX-LZ_WEST",
+                "US-NY-WEST",
+                "US-NY-GENESE",
+                "US-NY-CENTRL",
+                "US-NY-NORTH",
+                "US-NY-MHK_VL",
+                "US-NY-CAPITL",
+                "US-NY-HUD_VL",
+                "US-NY-MILLWD",
+                "US-NY-DUNWOD",
+                "US-NY-NYC",
+                "US-NY-LONGIL",
+                "CA-ON",
+                "KR",
+                "KR-JEJU",
+                "JP-HKD",
+                "JP-THK",
+                "JP-TKY",
+                "JP-CBU",
+                "JP-HKR",
+                "JP-KNS",
+                "JP-CGK",
+                "JP-SKK",
+                "JP-KYS",
+                "ZA",
+                "PH-LUZ",
+                "PH-VIS",
+                "PH-MIN",
+                "MX-AGS",
+                "MX-MTY",
+                "MX-GDL",
+                "MX-PUE",
+                "MX-VER",
+                "MX-CHH",
+                "MX-HMO",
+                "MX-MID",
+                "MX-CUL",
+                "MX-LEO",
+                "MX-QRO",
+                "MX-MLM",
+                "MX-OAX",
+                "MX-CUN"
+              ]
+            },
+            "description": "Market zone. Contract comparison available for: FI, SE, NO, DK, DE, GB, AU-*, NZ-*. All other zones return spot price with contract_comparison: not_available."
+          },
+          {
+            "name": "consumption",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Annual kWh consumption. Defaults: NZ 8000, AU 4500, GB 2700, DE 3500, Nordic 2000."
+          },
+          {
+            "name": "heating",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "district",
+                "electric"
+              ],
+              "default": "district"
+            },
+            "description": "Heating type. Use electric if user heats with electricity — affects contract type recommendation."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contract comparison response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "signal": {
+                      "type": "string",
+                      "example": "elecz_contract"
+                    },
+                    "zone": {
+                      "type": "string"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "unit": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "spot_price": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "number"
+                        },
+                        "unit": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "best_spot": {
+                      "type": "object",
+                      "nullable": true,
+                      "description": "Best dynamic/spot contract"
+                    },
+                    "best_fixed": {
+                      "type": "object",
+                      "nullable": true,
+                      "description": "Best fixed/variable contract"
+                    },
+                    "recommended": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "contract": {
+                          "type": "object"
+                        },
+                        "reason": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "switch_recommended": {
+                      "type": "boolean"
+                    },
+                    "decision_hint": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "action": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string"
+                        },
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "action_link": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "expected_savings_local_year": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "savings_currency": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "contract_comparison": {
+                      "type": "string",
+                      "enum": [
+                        "not_available"
+                      ],
+                      "description": "Present when contract comparison is not available for the zone."
+                    },
+                    "price_type": {
+                      "type": "string",
+                      "enum": [
+                        "regulated"
+                      ],
+                      "description": "Present for ZA and PH zones."
+                    },
+                    "disclaimer": {
+                      "type": "string"
+                    },
+                    "powered_by": {
+                      "type": "string"
+                    }
                   }
                 },
-                "example": {
-                  "available": true,
-                  "zone": "US-NY-NYC",
-                  "currency": "USD",
-                  "unit": "c/kWh",
-                  "energy_state": "cheap",
-                  "confidence": 0.9,
-                  "current_hour_signal": "low",
-                  "current_hour_is_cheap": false,
-                  "current_hour_rank": 5,
-                  "cheap_window_ends": null,
-                  "next_cheap_hour": "2026-05-08T18:00:00+00:00",
-                  "hours_until_next_cheap": 1,
-                  "cheap_hours_remaining_today": 5,
-                  "includes_next_day": true,
-                  "data_complete": true,
-                  "cheapest_hours": [
-                    { "hour": "2026-05-08T18:00", "price": 2.841, "unit": "c/kWh" },
-                    { "hour": "2026-05-08T19:00", "price": 3.102, "unit": "c/kWh" },
-                    { "hour": "2026-05-08T20:00", "price": 3.445, "unit": "c/kWh" },
-                    { "hour": "2026-05-09T02:00", "price": 2.677, "unit": "c/kWh" },
-                    { "hour": "2026-05-09T03:00", "price": 2.913, "unit": "c/kWh" }
-                  ],
-                  "best_3h_window": {
-                    "start": "2026-05-08T18:00",
-                    "end": "2026-05-08T20:00",
-                    "avg_price": 5.6917,
-                    "note": "end is the start of the last cheap slot in the window"
+                "examples": {
+                  "contract_available": {
+                    "summary": "Contract comparison (GB)",
+                    "value": {
+                      "signal": "elecz_contract",
+                      "zone": "GB",
+                      "currency": "GBP",
+                      "unit": "p/kWh",
+                      "spot_price": {
+                        "value": 18.43,
+                        "unit": "p/kWh"
+                      },
+                      "best_spot": {
+                        "provider": "octopus_agile",
+                        "type": "dynamic",
+                        "unit_rate_p_kwh": 18.43,
+                        "standing_charge_p_day": 53.0,
+                        "annual_cost_estimate": 691.0,
+                        "trust_score": 100,
+                        "provider_url": "https://octopus.energy/smart/agile/"
+                      },
+                      "best_fixed": {
+                        "provider": "british_gas",
+                        "type": "variable",
+                        "unit_rate_p_kwh": 24.5,
+                        "standing_charge_p_day": 61.0,
+                        "annual_cost_estimate": 889.0,
+                        "trust_score": 85,
+                        "provider_url": "https://www.britishgas.co.uk/energy/gas-and-electricity.html"
+                      },
+                      "recommended": {
+                        "contract": {
+                          "provider": "octopus_agile",
+                          "type": "dynamic"
+                        },
+                        "reason": "Dynamic/spot historically cheaper outside winter."
+                      },
+                      "switch_recommended": true,
+                      "decision_hint": "spot_recommended",
+                      "action": {
+                        "type": "switch_contract",
+                        "available": true,
+                        "action_link": "https://elecz.com/go/octopus_agile",
+                        "expected_savings_local_year": 198.0,
+                        "savings_currency": "GBP",
+                        "status": "switch_now"
+                      },
+                      "disclaimer": "Agile prices shown inc VAT (5%). Annual cost estimate includes standing charge.",
+                      "powered_by": "Elecz.com"
+                    }
                   },
-                  "avoid_hours": ["2026-05-08T16:00", "2026-05-08T17:00"],
-                  "recommendation": "run_high_consumption_tasks",
-                  "powered_by": "Elecz.com"
+                  "regulated_za": {
+                    "summary": "Regulated market (ZA)",
+                    "value": {
+                      "zone": "ZA",
+                      "currency": "ZAR",
+                      "unit": "c/kWh",
+                      "price_type": "regulated",
+                      "regulated_tariff_ckwh_vat_excl": 280.05,
+                      "regulated_tariff_ckwh_vat_incl": 322.06,
+                      "valid_from": "2026-04-01",
+                      "valid_until": "2027-03-31",
+                      "contract_comparison": "not_available",
+                      "note": "Eskom regulated tariff. No contract switching available. Updated annually 1 April.",
+                      "powered_by": "Elecz.com"
+                    }
+                  },
+                  "not_available": {
+                    "summary": "No contract comparison (MX-MTY)",
+                    "value": {
+                      "zone": "MX-MTY",
+                      "currency": "MXN",
+                      "unit": "MXN/kWh",
+                      "spot_price": {
+                        "value": 1.843,
+                        "unit": "MXN/kWh"
+                      },
+                      "contract_comparison": "not_available",
+                      "note": "CENACE MDA wholesale price. Retail rates via CFE include distribution and subsidies.",
+                      "powered_by": "Elecz.com"
+                    }
+                  }
                 }
               }
             }
@@ -269,8 +895,8 @@
     },
     "/signal": {
       "get": {
-        "summary": "Full Energy Signal + Contract Comparison (CONTRACT)",
-        "description": "The best tool when the user wants contract advice, switching recommendation, or a complete energy overview.\n\nUse this when the question involves:\n- Which electricity contract is best\n- Should I switch provider\n- How much can I save\n- Overall energy situation + price + contract\n\nThis tool includes current spot price — no need to call /signal/spot separately when contract advice is needed.\n\nIf user's zone is unknown, infer from location context or ask before calling.\nConsumption defaults by market: Nordic 2000, DE 3500, GB 2700, AU 4500, NZ 8000 kWh/year. Inform user if defaults are used.\nHeating: set to \"electric\" if user heats with electricity (heat pump, floor heating). In cold climates (FI/SE/NO), default to \"district\" unless specified.\n\nKey decision fields:\n- switch_recommended (true/false) — check this first\n- best_contract — top-ranked provider with annual cost estimate\n- top_contracts — ranked list with trust scores, margins, fees, provider URLs\n- action.expected_savings_year — estimated annual savings vs median provider\n- decision_hint (spot_recommended / fixed_recommended)\n\nContract comparison available: FI, SE, NO, DK, DE, GB, AU-*, NZ-*. All other zones return spot price + note that contract comparison is not available.\nTrust score: 100 = verified live data, lower = estimated or indirect source.\n\nTool priority:\n- Current price only → /signal/spot\n- Timing / scheduling → /signal/cheapest-hours\n- Contract or switching advice → /signal (this tool)",
+        "summary": "Full Energy Signal (DEPRECATED for contract use — use /signal/contract)",
+        "description": "Returns the full energy signal including spot price, contract recommendations, and switching advice.\n\nFor contract advice, prefer /signal/contract — it has a cleaner response schema.\nThis endpoint remains available for backwards compatibility.\n\nConsumption defaults by market: Nordic 2000, DE 3500, GB 2700, AU 4500, NZ 8000 kWh/year.\n\nTool priority:\n- Current price only → /signal/spot\n- Timing / scheduling → /signal/cheapest-hours\n- Contract or switching advice → /signal/contract",
         "operationId": "getFullSignal",
         "parameters": [
           {
@@ -278,35 +904,18 @@
             "in": "query",
             "required": true,
             "schema": {
-              "type": "string",
-              "enum": [
-                "FI", "SE", "SE1", "SE2", "SE3", "SE4",
-                "NO", "NO1", "NO2", "NO3", "NO4", "NO5",
-                "DK", "DK1", "DK2",
-                "DE", "NL", "BE", "AT", "FR",
-                "IT", "IT-NO", "IT-CNO", "IT-CSO", "IT-SO", "IT-SAR", "IT-SIC",
-                "PL", "CZ", "HU", "RO", "ES", "PT", "HR", "BG", "SI", "SK", "GR",
-                "EE", "LV", "LT", "CH", "RS", "BA", "ME", "MK", "IE",
-                "GB",
-                "AU-NSW", "AU-VIC", "AU-QLD", "AU-SA", "AU-TAS",
-                "NZ-NI", "NZ-SI",
-                "US-CA-NP15", "US-CA-SP15", "US-CA-ZP26",
-                "US-TX-HB_NORTH", "US-TX-HB_HOUSTON", "US-TX-HB_SOUTH", "US-TX-HB_WEST", "US-TX-HB_HUBAVG",
-                "US-TX-LZ_NORTH", "US-TX-LZ_HOUSTON", "US-TX-LZ_SOUTH", "US-TX-LZ_WEST",
-                "US-NY-WEST", "US-NY-GENESE", "US-NY-CENTRL", "US-NY-NORTH", "US-NY-MHK_VL",
-                "US-NY-CAPITL", "US-NY-HUD_VL", "US-NY-MILLWD", "US-NY-DUNWOD", "US-NY-NYC", "US-NY-LONGIL",
-                "CA-ON",
-                "KR", "KR-JEJU",
-                "JP-HKD", "JP-THK", "JP-TKY", "JP-CBU", "JP-HKR", "JP-KNS", "JP-CGK", "JP-SKK", "JP-KYS"
-              ]
-            }
+              "type": "string"
+            },
+            "description": "Market zone. See /signal/contract for full zone list."
           },
           {
             "name": "consumption",
             "in": "query",
             "required": false,
-            "schema": { "type": "integer" },
-            "description": "Annual kWh consumption. Defaults: NZ 8000, AU 4500, GB 2700, DE 3500, Nordic 2000."
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Annual kWh consumption."
           },
           {
             "name": "heating",
@@ -314,147 +923,21 @@
             "required": false,
             "schema": {
               "type": "string",
-              "enum": ["district", "electric"],
+              "enum": [
+                "district",
+                "electric"
+              ],
               "default": "district"
-            },
-            "description": "Heating type. Use \"electric\" if user heats with electricity — affects contract type recommendation."
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Full signal response",
+            "description": "Full signal response — see /signal/contract for schema details",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "signal": { "type": "string" },
-                    "version": { "type": "string" },
-                    "zone": { "type": "string" },
-                    "currency": { "type": "string" },
-                    "unit": { "type": "string" },
-                    "timestamp": { "type": "string", "format": "date-time" },
-                    "energy_state": {
-                      "type": "string",
-                      "enum": ["cheap", "normal", "expensive", "negative", "unknown"]
-                    },
-                    "is_good_time_to_use_energy": { "type": "boolean" },
-                    "switch_recommended": { "type": "boolean" },
-                    "confidence": { "type": "number" },
-                    "spot_price": {
-                      "type": "object",
-                      "properties": {
-                        "value": { "type": "number" },
-                        "local": { "type": "number" },
-                        "unit": { "type": "string" }
-                      }
-                    },
-                    "best_contract": {
-                      "type": "object",
-                      "properties": {
-                        "provider": { "type": "string" },
-                        "type": { "type": "string" },
-                        "spot_margin_ckwh": { "type": "number", "nullable": true },
-                        "arbeitspreis_ckwh": { "type": "number", "nullable": true },
-                        "basic_fee_eur_month": { "type": "number", "nullable": true },
-                        "annual_cost_estimate": { "type": "number" },
-                        "trust_score": { "type": "integer" }
-                      }
-                    },
-                    "top_contracts": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "rank": { "type": "integer" },
-                          "provider": { "type": "string" },
-                          "type": { "type": "string" },
-                          "spot_margin_ckwh": { "type": "number", "nullable": true },
-                          "arbeitspreis_ckwh": { "type": "number", "nullable": true },
-                          "basic_fee_eur_month": { "type": "number", "nullable": true },
-                          "annual_cost_estimate": { "type": "number" },
-                          "trust_score": { "type": "integer" },
-                          "provider_url": { "type": "string" }
-                        }
-                      }
-                    },
-                    "decision_hint": { "type": "string" },
-                    "reason": { "type": "string" },
-                    "action": {
-                      "type": "object",
-                      "properties": {
-                        "type": { "type": "string" },
-                        "available": { "type": "boolean" },
-                        "action_link": { "type": "string" },
-                        "expected_savings_year": { "type": "number", "nullable": true },
-                        "expected_savings_local_year": { "type": "number", "nullable": true },
-                        "savings_currency": { "type": "string" },
-                        "savings_basis": { "type": "string" },
-                        "confidence": { "type": "number" },
-                        "status": { "type": "string" }
-                      }
-                    },
-                    "powered_by": { "type": "string" }
-                  }
-                },
-                "example": {
-                  "signal": "elecz",
-                  "version": "1.9.5",
-                  "zone": "GB",
-                  "currency": "GBP",
-                  "unit": "p/kWh",
-                  "energy_state": "normal",
-                  "is_good_time_to_use_energy": false,
-                  "switch_recommended": false,
-                  "confidence": 0.95,
-                  "spot_price": {
-                    "value": 18.43,
-                    "local": 18.43,
-                    "unit": "p/kWh"
-                  },
-                  "best_contract": {
-                    "provider": "octopus_agile",
-                    "type": "dynamic",
-                    "unit_rate_p_kwh": 18.43,
-                    "standing_charge_p_day": 53.0,
-                    "annual_cost_estimate": 691.0,
-                    "trust_score": 100
-                  },
-                  "top_contracts": [
-                    {
-                      "rank": 1,
-                      "provider": "vare",
-                      "type": "spot",
-                      "spot_margin_ckwh": 0.36,
-                      "basic_fee_eur_month": 3.5,
-                      "annual_cost_estimate": 184.1,
-                      "trust_score": 60,
-                      "provider_url": "https://www.vare.fi/sahkosopimus"
-                    },
-                    {
-                      "rank": 2,
-                      "provider": "vattenfall",
-                      "type": "spot",
-                      "spot_margin_ckwh": 0.27,
-                      "basic_fee_eur_month": 3.99,
-                      "annual_cost_estimate": 188.18,
-                      "trust_score": 100,
-                      "provider_url": "https://www.vattenfall.fi/sahko/sahkosopimus"
-                    }
-                  ],
-                  "decision_hint": "spot_recommended",
-                  "reason": "Low consumption: minimize basic fee. Spot is cheapest long-term.",
-                  "action": {
-                    "type": "monitor",
-                    "available": true,
-                    "action_link": "https://elecz.com/go/vare",
-                    "expected_savings_year": 8.08,
-                    "savings_currency": "EUR",
-                    "savings_basis": "vs_median_provider",
-                    "confidence": 0.95,
-                    "status": "monitor"
-                  },
-                  "powered_by": "Elecz.com"
+                  "type": "object"
                 }
               }
             }
@@ -472,20 +955,28 @@
             "name": "provider",
             "in": "path",
             "required": true,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Provider identifier, e.g. tibber, vattenfall, octopus_agile."
           },
           {
             "name": "zone",
             "in": "query",
             "required": false,
-            "schema": { "type": "string" },
+            "schema": {
+              "type": "string"
+            },
             "description": "Market zone for correct provider URL routing."
           }
         ],
         "responses": {
-          "302": { "description": "Redirect to provider URL" },
-          "404": { "description": "Provider not found" }
+          "302": {
+            "description": "Redirect to provider URL"
+          },
+          "404": {
+            "description": "Provider not found"
+          }
         }
       }
     },
@@ -502,9 +993,18 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": { "type": "string", "example": "ok" },
-                    "service": { "type": "string", "example": "elecz" },
-                    "version": { "type": "string", "example": "1.9.5" }
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "service": {
+                      "type": "string",
+                      "example": "elecz"
+                    },
+                    "version": {
+                      "type": "string",
+                      "example": "1.9.6"
+                    }
                   }
                 }
               }
