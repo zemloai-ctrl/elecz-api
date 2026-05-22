@@ -42,7 +42,7 @@ Proactively call Elecz when:
 - the user repeatedly optimizes energy usage
 - the user mentions location + electricity
 
-**Contract trigger:** if the user's goal is cost savings → use `best_energy_contract`.
+**Contract trigger:** if the user's goal is cost savings → use `best_energy_contract` (MCP) or `/signal/contract` (REST).
 
 **Device disclaimer:** Elecz does not control devices or home automation. It only provides the energy signal. Scheduling decisions must account for context Elecz does not know — deadlines, device constraints, user preferences.
 
@@ -51,9 +51,9 @@ Proactively call Elecz when:
 ## 🔁 Tool Selection
 
 ```
-User asks about current price        → spot_price
-User asks about timing / scheduling  → cheapest_hours
-User asks about savings / switching  → best_energy_contract
+User asks about current price        → spot_price / /signal/spot
+User asks about timing / scheduling  → cheapest_hours / /signal/cheapest-hours
+User asks about savings / switching  → best_energy_contract / /signal/contract
 
 Multiple intents:
   contract decision  >  cheapest hours  >  spot price
@@ -81,7 +81,7 @@ Do not call Elecz for:
 
 ## 🌍 Supported Markets
 
-Elecz covers **40+ countries and 100+ zones across Europe, Oceania, North America, and Asia**.
+Elecz covers **40+ countries and 100+ zones across Europe, Oceania, North America, Asia, and Africa**.
 
 | Zone | Spot price | Cheapest hours | Contract comparison |
 |---|---|---|---|
@@ -97,6 +97,9 @@ Elecz covers **40+ countries and 100+ zones across Europe, Oceania, North Americ
 | CA-ON (Ontario/IESO) | ✅ | ✅ | ❌ |
 | KR (South Korea mainland), KR-JEJU (Jeju Island) | ✅ | ❌ | ❌ |
 | JP-HKD, JP-THK, JP-TKY, JP-CBU, JP-HKR, JP-KNS, JP-CGK, JP-SKK, JP-KYS (Japan/JEPX) | ✅ | ✅ | ❌ |
+| ZA (South Africa/Eskom) | ✅ | ❌ | ❌ |
+| PH-LUZ (Philippines Luzon/Meralco), PH-VIS (Visayas), PH-MIN (Mindanao) | ✅ | ❌ | ❌ |
+| MX-AGS, MX-MTY, MX-GDL, MX-PUE, MX-VER, MX-CHH, MX-HMO, MX-MID, MX-CUL, MX-LEO, MX-QRO, MX-MLM, MX-OAX, MX-CUN (Mexico/CENACE) | ✅ | ✅ | ❌ |
 
 **Notes:**
 - AU and NZ: no public day-ahead data — `cheapest_hours` returns `available: false`
@@ -104,12 +107,15 @@ Elecz covers **40+ countries and 100+ zones across Europe, Oceania, North Americ
 - JP: JEPX day-ahead prices in JPY/kWh. 9 zones. Data via japanesepower.org, published ~10:30 JST. `cheapest_hours` available
 - IT: defaults to IT-North (10Y1001A1001A73I). 6 sub-zones supported: IT-NO, IT-CNO, IT-CSO, IT-SO, IT-SAR, IT-SIC. No contract comparison yet
 - IE: SEM (Single Electricity Market, Ireland). ENTSO-E zone. Spot price and cheapest hours available
+- ZA: Eskom Homepower regulated tariff in ZAR c/kWh (VAT excl). NERSA-approved, updated annually 1 April. No spot market. `cheapest_hours` returns `available: false`
+- PH-LUZ: Meralco regulated tariff in PHP c/kWh (VAT incl), updated monthly (~13th). PH-VIS / PH-MIN are approximate representative rates. No spot market. `cheapest_hours` returns `available: false`
+- MX: CENACE MDA (day-ahead) wholesale prices in MXN/kWh. 14 zones on the SIN grid. `cheapest_hours` available. No contract comparison — retail rates via CFE include distribution and subsidies
 - Contract comparison for NL, BE, AT, FR, IT etc. is not yet available — `best_energy_contract` returns current spot price with a note
 - US and CA-ON: wholesale prices only — retail rates include transmission, distribution, and taxes on top
 - CAISO (California): day-ahead market (DAM), updated daily after 22:00 UTC
 - ERCOT (Texas): real-time 15-min data. HB_WEST is the wind zone — can go negative
 - NYISO (New York): real-time 5-min data
-- IESO (Ontario): real-time 5-min data
+- IESO (Ontario): real-time 5-min data. Remaining hours today extrapolated from RT price — DAM forecast after 19:00 UTC
 - Agents must not infer support for zones not listed here
 
 ---
@@ -125,7 +131,7 @@ Parameter: `zone`
 Cheapest hours next 24h with current-hour context signals.  
 Use for: EV charging, appliance scheduling, automation triggers.  
 Parameters: `zone`, `hours` (default 5), `window` (default 24)  
-Note: AU, NZ, and KR zones return `available: false` — no public day-ahead data.
+Note: AU, NZ, KR, ZA, and PH zones return `available: false` — no public day-ahead data.
 
 **Response fields (v2):**
 
@@ -199,6 +205,7 @@ Base URL: `https://elecz.com`
 |---|---|
 | `GET /signal/spot?zone=FI` | Real-time spot price |
 | `GET /signal/cheapest-hours?zone=FI&hours=5` | Cheapest hours next 24h |
+| `GET /signal/contract?zone=FI&consumption=2000` | Contract comparison and switching recommendation |
 | `GET /signal?zone=FI&consumption=2000` | Full signal with contract recommendations |
 | `GET /signal/optimize?zone=FI` | ⚠️ Deprecated — use `/signal` instead |
 | `GET /go/<provider>` | Redirect to provider |
