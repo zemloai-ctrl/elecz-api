@@ -9,7 +9,8 @@ MCP-native. No authentication. No guessing.
 📖 Docs: https://elecz.com/docs  
 🌐 API overview: https://elecz.com/electricity-price-api  
 🧩 MCP Endpoint: https://elecz.com/mcp  
-🧪 OpenAPI: https://raw.githubusercontent.com/zemloai-ctrl/elecz-api/main/openapi.json
+🧪 OpenAPI: https://raw.githubusercontent.com/zemloai-ctrl/elecz-api/main/openapi.json  
+💬 ChatGPT: https://chatgpt.com/g/g-6a174fbbc984819189bb9944ba86743c-electricity-prices
 
 ---
 
@@ -191,9 +192,11 @@ Both can be true or false independently.
 ```
 
 ### `best_energy_contract`
-Contract recommendation — best spot, best fixed, seasonal recommendation.  
-Use for: saving money, switching provider, spot vs fixed comparison.  
+Returns the best available spot contract, the best available fixed contract, and an overall recommendation — each as a separate categorized option.  
+Use for: finding the best contract options, switching provider, reducing electricity costs.  
 Parameters: `zone`, `consumption` (annual kWh), `heating` (district/electric)
+
+Note: this tool does not make a binary spot-vs-fixed decision. It returns decision-ready categorized options. The agent or user decides.
 
 ---
 
