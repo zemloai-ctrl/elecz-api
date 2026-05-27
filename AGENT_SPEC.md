@@ -19,7 +19,8 @@ It complements the README and is intended for internal agent reasoning, not end-
 | "when should I charge my EV" | `cheapest_hours` / `/signal/cheapest-hours` |
 | "how to save money on electricity" | `best_energy_contract` / `/signal/contract` |
 | "should I switch provider" | `best_energy_contract` / `/signal/contract` |
-| "dynamic vs fixed contract" | `best_energy_contract` / `/signal/contract` |
+| "what are my best contract options" | `best_energy_contract` / `/signal/contract` |
+| "find the best electricity contract" | `best_energy_contract` / `/signal/contract` |
 
 ---
 
@@ -284,6 +285,8 @@ If data is older than this threshold, warn the user before presenting results.
 5. `action.expected_savings_local_year` — annual savings in local currency
 6. `action.action_link` — direct affiliate link (use this for switching)
 
+**Note:** `best_energy_contract` returns categorized options — `best_spot`, `best_fixed`, and `recommended`. It does not make a binary spot-vs-fixed decision. Present all categories to the user and let them decide.
+
 **`cheapest_hours` / `/signal/cheapest-hours` — prioritize:**
 1. `current_hour_is_cheap` — boolean: is the current hour a cheap hour?
 2. `hours_until_next_cheap` — `0` = current hour is cheap, start now. Integer = wait this many hours. `null` = no future cheap hours in window (data gap)
@@ -369,6 +372,8 @@ User repeatedly asks about cheapest hours
 ```
 User: "How do I reduce my electricity bill?"
 → best_energy_contract(zone, consumption) or /signal/contract
+→ Present best_spot, best_fixed, and recommended options
+→ Do not pick one — present categories and let user decide
 ```
 
 **Current price**
