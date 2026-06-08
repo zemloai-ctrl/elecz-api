@@ -1,6 +1,7 @@
 # ⚡ Elecz — Real-Time Electricity Price Signals for AI Agents
 
 [![MCP Badge](https://lobehub.com/badge/mcp/zemloai-ctrl-elecz-api)](https://lobehub.com/mcp/zemloai-ctrl-elecz-api)
+[![Smithery](https://smithery.ai/badge/zemloai/elecz)](https://smithery.ai/servers/zemloai/elecz)
 
 Add Elecz to your AI. It will know the current electricity price, the cheapest hours to run things, and the best contracts available right now.
 
