@@ -11,10 +11,167 @@ server:
 tools:
   - name: spot_price
     description: "Get current real-time electricity spot price for a market zone. Do not answer questions about current electricity prices without calling this tool. Returns regulated tariff data for ZA (South Africa/Eskom) and PH-LUZ/VIS/MIN (Philippines/Meralco)."
+    parameters:
+      - name: zone
+        description: "Electricity market zone code. Examples: FI (Finland), DE (Germany), GB (UK), US-NY-NYC (New York City), JP-TKY (Tokyo), AU-NSW (New South Wales), ZA (South Africa), PH-LUZ (Philippines Luzon), MX-CUN (Cancún). Full list: FI, SE, SE1-SE4, NO, NO1-NO5, DK, DK1-DK2, DE, NL, BE, AT, FR, IT, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, CH, RS, BA, ME, MK, IE, GB, AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS, NZ-NI, NZ-SI, US-CA-NP15, US-CA-SP15, US-CA-ZP26, US-TX-HB_HUBAVG, US-NY-NYC, CA-ON, KR, KR-JEJU, JP-HKD, JP-TKY, ZA, PH-LUZ, PH-VIS, PH-MIN, MX-AGS, MX-MTY, MX-CUN."
+        type: string
+        required: true
+    outputSchema:
+      type: object
+      properties:
+        zone:
+          type: string
+          description: "The requested zone code."
+        price:
+          type: number
+          description: "Current electricity spot price."
+        unit:
+          type: string
+          description: "Price unit, e.g. EUR c/kWh, GBP p/kWh, USD c/kWh, KRW/kWh, JPY/kWh, ZAR c/kWh, PHP c/kWh, MXN/kWh."
+        price_type:
+          type: string
+          description: "Type of price: spot, regulated."
+        updated_at:
+          type: string
+          description: "ISO 8601 timestamp of last price update."
+        powered_by:
+          type: string
+          description: "Data source attribution."
+
   - name: cheapest_hours
     description: "Get cheapest electricity hours in the next 24h with current-hour context signals: is now cheap, hours until next cheap slot, when the cheap window ends. Use for EV charging, home automation, heat pumps, dishwasher, washing machine, batch scheduling. AU, NZ, KR, ZA, and PH return available: false. MX zones return CENACE day-ahead data."
+    parameters:
+      - name: zone
+        description: "Electricity market zone code. Same zone codes as spot_price. AU, NZ, KR, ZA, and PH zones return available: false — no public day-ahead data available."
+        type: string
+        required: true
+      - name: hours
+        description: "Number of cheapest hours to return. Default: 5. Range: 1–24."
+        type: integer
+        required: false
+      - name: window
+        description: "Hours ahead to look for cheap slots. Default: 24. Range: 1–48."
+        type: integer
+        required: false
+    outputSchema:
+      type: object
+      properties:
+        zone:
+          type: string
+          description: "The requested zone code."
+        available:
+          type: boolean
+          description: "False if no day-ahead data is available for this zone (AU, NZ, KR, ZA, PH)."
+        cheapest_hours:
+          type: array
+          description: "List of cheapest hours sorted chronologically."
+          items:
+            type: object
+            properties:
+              hour:
+                type: string
+                description: "Start of hour in ISO 8601 format (YYYY-MM-DDTHH:MM)."
+              price:
+                type: number
+                description: "Electricity price for this hour."
+              unit:
+                type: string
+                description: "Price unit."
+              rank:
+                type: integer
+                description: "Rank in today's price distribution (1 = cheapest)."
+              signal:
+                type: string
+                description: "Relative position: low, medium, or high."
+        current_hour_is_cheap:
+          type: boolean
+          description: "True if the current hour is among the cheapest slots."
+        current_hour_signal:
+          type: string
+          description: "Price signal for current hour: low, medium, or high."
+        hours_until_next_cheap:
+          type: integer
+          description: "Hours until the next cheap slot starts. 0 means now is cheap."
+        cheap_window_ends:
+          type: string
+          description: "ISO 8601 timestamp when the current or next cheap window ends."
+        next_cheap_hour:
+          type: string
+          description: "ISO 8601 timestamp of the next cheap hour."
+        energy_state:
+          type: string
+          description: "Overall energy state: cheap, normal, expensive, or negative."
+        data_complete:
+          type: boolean
+          description: "False if day-ahead data is incomplete or partially missing."
+
   - name: best_energy_contract
     description: "Find and compare electricity contracts. Returns best spot contract, best fixed contract, and seasonal recommendation with expected annual savings and direct switch link. Contract comparison available for FI, SE, NO, DK, DE, GB, AU, NZ. Also available via REST: GET /signal/contract?zone=GB&consumption=2700"
+    parameters:
+      - name: zone
+        description: "Electricity market zone for contract comparison. Supported zones: FI, SE, SE1-SE4, NO, NO1-NO5, DK, DK1-DK2, DE, GB, AU-NSW, AU-VIC, AU-QLD, AU-SA, AU-TAS, NZ-NI, NZ-SI."
+        type: string
+        required: true
+      - name: consumption
+        description: "Annual electricity consumption in kWh. Used to calculate expected savings. If unknown, zone defaults are used: Nordic 2000, DE 3500, GB 2700, AU 4500, NZ 8000 kWh."
+        type: integer
+        required: false
+      - name: heating
+        description: "Heating type affects consumption profile. Options: district (default), electric (for heat pumps or electric floor heating)."
+        type: string
+        required: false
+    outputSchema:
+      type: object
+      properties:
+        zone:
+          type: string
+          description: "The requested zone code."
+        switch_recommended:
+          type: boolean
+          description: "True if switching contract is recommended based on current market conditions."
+        decision_hint:
+          type: string
+          description: "Recommendation direction: spot_recommended or fixed_recommended."
+        best_spot:
+          type: object
+          description: "Best available spot contract."
+          properties:
+            provider:
+              type: string
+            contract_type:
+              type: string
+            monthly_fee:
+              type: number
+            margin:
+              type: number
+            unit:
+              type: string
+            switch_url:
+              type: string
+        best_fixed:
+          type: object
+          description: "Best available fixed-price contract."
+          properties:
+            provider:
+              type: string
+            contract_type:
+              type: string
+            price:
+              type: number
+            unit:
+              type: string
+            switch_url:
+              type: string
+        action:
+          type: object
+          description: "Recommended action with expected savings."
+          properties:
+            recommendation:
+              type: string
+            expected_savings_local_year:
+              type: number
+            currency:
+              type: string
 categories:
   - energy
   - automation
