@@ -324,7 +324,7 @@ If data is older than this threshold, warn the user before presenting results.
 - **CH** — Switzerland is not an EU member but participates in ENTSO-E. Spot price available.
 - **NL, BE, AT, FR, PL, CZ, HU, RO, ES, PT, HR, BG, SI, SK, GR, EE, LV, LT, RS, BA, ME, MK** — Spot price and cheapest hours available. Contract comparison not yet available — `best_energy_contract` returns current spot price with a note.
 - **US-CA (CAISO)** — Day-ahead market (DAM), updated daily after 22:00 UTC. Wholesale prices only. `cheapest_hours` available (DAM hourly data). No contract comparison.
-- **US-TX (ERCOT)** — Real-time 15-min data from public CDR. HB_WEST is the wind zone — prices can go negative. `cheapest_hours` uses DAM data (updated 18:30 UTC daily). No contract comparison.
+- **US-TX (ERCOT)** — Real-time 15-min spot price from public CDR. HB_WEST is the wind zone — prices can go negative. `cheapest_hours` currently returns `available: false` — ERCOT's day-ahead market requires authenticated API access (OAuth token) not yet integrated. Do not tell users cheapest-hour data is available for Texas. No contract comparison.
 - **US-NY (NYISO)** — Real-time 5-min data. `cheapest_hours` uses DAM data (updated 17:00 UTC daily). No contract comparison.
 - **CA-ON (IESO)** — Real-time 5-min Ontario Zonal Price in CAD. `cheapest_hours` uses DAM data (updated 19:00 UTC daily). Remaining hours today extrapolated from RT price. No contract comparison.
 - **KR / KR-JEJU** — SMP (System Marginal Price) from KPX EPSIS, ex-post actual hourly (~1h lag). Prices in KRW/kWh. `cheapest_hours` returns `available: false` — no public day-ahead data. No contract comparison — regulated retail market (KEPCO monopoly).
