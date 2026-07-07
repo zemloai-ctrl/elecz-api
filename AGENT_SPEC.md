@@ -45,10 +45,14 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | Finland | FI |
 | Sweden | SE3 |
 | Northern Sweden | SE1 |
+| Northern-Central Sweden (Sundsvall/Gävle) | SE2 |
 | Southern Sweden | SE4 |
 | Norway | NO1 |
+| Southwest Norway (Kristiansand) | NO2 |
+| Central Norway (Trondheim) | NO3 |
 | Northern Norway | NO4 |
-| Denmark | DK1 |
+| West Norway (Bergen) | NO5 |
+| Denmark — **do not default**. 2 zones (DK1 west / DK2 east incl. Copenhagen) with materially different prices. Ask which half, or use city mapping below. | — |
 | Germany | DE |
 | Netherlands | NL |
 | Belgium | BE |
@@ -82,13 +86,16 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | North Macedonia | MK |
 | Ireland | IE |
 | United Kingdom | GB |
+| United Kingdom — note: 14 regional DNO sub-zones (`GB-A`...`GB-P`, letter I skipped) exist and return real data from the backend, but are **not yet in the public openapi.json zone enum** — ChatGPT/Actions callers cannot select them until that's fixed. Claude/MCP callers can already use them directly (see city mapping below). Default to plain `GB` if the sub-zone can't be inferred. | — |
 | Australia | AU-NSW |
 | New Zealand | NZ-NI |
 | California (NorCal / PG&E) | US-CA-NP15 |
 | California (SoCal / SCE+SDG&E) | US-CA-SP15 |
+| California (Desert/Inland Empire) | US-CA-ZP26 |
 | Texas | US-TX-HB_HUBAVG |
+| Texas — note: `HB_*` = wholesale trading hub, `LZ_*` = utility load zone. Default to `HB_*` for general "what does it cost" questions; only use `LZ_*` if the user explicitly references a load-zone/utility settlement point. `HB_WEST` is the wind-heavy zone — prices can go negative, flag this when relevant. | — |
 | New York City | US-NY-NYC |
-| New York State | US-NY-CENTRL |
+| New York State — **do not default to a single zone**. NYISO has 11 zones (WEST/GENESE/CENTRL/NORTH/MHK_VL/CAPITL/HUD_VL/MILLWD/DUNWOD/NYC/LONGIL) with materially different prices. If no city is given, ask which region. | — |
 | Ontario | CA-ON |
 | South Korea | KR |
 | South Korea (Jeju Island) | KR-JEJU |
@@ -109,7 +116,17 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | Mexico (Monterrey) | MX-MTY |
 | Mexico (Guadalajara) | MX-GDL |
 | Mexico (Cancún) | MX-CUN |
-| Mexico (Tijuana / Hermosillo) | MX-HMO |
+| Mexico (Hermosillo) | MX-HMO |
+| Mexico (Aguascalientes) | MX-AGS |
+| Mexico (Veracruz) | MX-VER |
+| Mexico (Chihuahua) | MX-CHH |
+| Mexico (Mérida) | MX-MID |
+| Mexico (Culiacán) | MX-CUL |
+| Mexico (León) | MX-LEO |
+| Mexico (Querétaro) | MX-QRO |
+| Mexico (Morelia) | MX-MLM |
+| Mexico (Oaxaca) | MX-OAX |
+| Mexico (Tijuana) — **not covered**. Baja California is an isolated grid, not part of CENACE's interconnected national system. Do not map to any MX-* zone; tell the user this market isn't supported yet. | — |
 
 **Cities → Zones**
 
@@ -118,13 +135,20 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | Stockholm | SE3 |
 | Gothenburg | SE3 |
 | Malmö | SE4 |
+| Sundsvall | SE2 |
+| Gävle | SE2 |
 | Oslo | NO1 |
+| Kristiansand | NO2 |
+| Trondheim | NO3 |
 | Bergen | NO5 |
+| Copenhagen | DK2 |
+| Aarhus | DK1 |
 | Amsterdam | NL |
 | Brussels | BE |
 | Vienna | AT |
 | Paris | FR |
-| Rome | IT |
+| Rome | IT — **unverified**: Terna's real zonal map has no plain "IT" zone; Rome likely falls in Centro-Sud (`IT-CSO`), not the national aggregate `IT`. Needs a backend check before trusting this row. |
+| Florence | IT-CNO |
 | Milan | IT-NO |
 | Naples | IT-SO |
 | Palermo | IT-SIC |
@@ -137,7 +161,13 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | Riga | LV |
 | Vilnius | LT |
 | Dublin | IE |
-| London | GB |
+| London | GB-C (falls back to `GB` until openapi.json exposes sub-zones — see UK note above) |
+| Manchester | GB-G |
+| Birmingham | GB-E |
+| Glasgow | GB-N |
+| Edinburgh | GB-N |
+| Cardiff | GB-K |
+| Bristol | GB-L |
 | Sydney | AU-NSW |
 | Melbourne | AU-VIC |
 | Brisbane | AU-QLD |
@@ -150,8 +180,26 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | Los Angeles | US-CA-SP15 |
 | San Diego | US-CA-SP15 |
 | Dallas | US-TX-HB_NORTH |
+| Fort Worth | US-TX-HB_NORTH |
 | Houston | US-TX-HB_HOUSTON |
-| New York City | US-NY-NYC |
+| San Antonio | US-TX-HB_SOUTH |
+| Austin | US-TX-HB_SOUTH |
+| Midland | US-TX-HB_WEST (wind zone — prices can go negative) |
+| Odessa | US-TX-HB_WEST (wind zone — prices can go negative) |
+| El Paso | **not covered** — El Paso is on the Western Interconnection, not ERCOT. Do not map to any US-TX-* zone. |
+| New York City (Manhattan / Brooklyn / Queens / Bronx / Staten Island) | US-NY-NYC |
+| Buffalo | US-NY-WEST |
+| Niagara Falls | US-NY-WEST |
+| Rochester | US-NY-GENESE |
+| Syracuse | US-NY-CENTRL |
+| Watertown | US-NY-NORTH |
+| Utica | US-NY-MHK_VL |
+| Albany | US-NY-CAPITL |
+| Poughkeepsie | US-NY-HUD_VL |
+| Yonkers | US-NY-DUNWOD |
+| White Plains | US-NY-DUNWOD |
+| Long Island / Hempstead | US-NY-LONGIL |
+| *(US-NY-MILLWD has no distinct city — small transmission-only zone in Westchester. If not explicitly named, treat nearby queries as DUNWOD or HUD_VL.)* | — |
 | Toronto | CA-ON |
 | Ottawa | CA-ON |
 | Seoul | KR |
@@ -172,6 +220,20 @@ Do not guess unless language → country mapping applies (e.g., Swedish text →
 | Monterrey | MX-MTY |
 | Guadalajara | MX-GDL |
 | Cancún | MX-CUN |
+| Hermosillo | MX-HMO |
+| Aguascalientes | MX-AGS |
+| Veracruz | MX-VER |
+| Chihuahua | MX-CHH |
+| Mérida | MX-MID |
+| Culiacán | MX-CUL |
+| León | MX-LEO |
+| Querétaro | MX-QRO |
+| Morelia | MX-MLM |
+| Oaxaca | MX-OAX |
+| Tijuana | **not covered** — isolated Baja California grid, not part of CENACE. Do not map to MX-HMO or any other zone. |
+| Fresno | US-CA-ZP26 |
+| Bakersfield | US-CA-ZP26 |
+| Palm Springs | US-CA-ZP26 |
 
 ---
 
