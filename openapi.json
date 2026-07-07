@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Elecz Electricity Price Signal API",
-    "version": "1.9.6",
+    "version": "1.9.7",
     "description": "Real-time electricity spot prices, cheapest hours, and contract comparison for 40+ countries across Europe, Oceania, North America, Asia, and Africa. No authentication required.",
     "contact": {
       "name": "Zemlo AI / Elecz",
@@ -77,6 +77,20 @@
                 "MK",
                 "IE",
                 "GB",
+                "GB-A",
+                "GB-B",
+                "GB-C",
+                "GB-D",
+                "GB-E",
+                "GB-F",
+                "GB-G",
+                "GB-H",
+                "GB-J",
+                "GB-K",
+                "GB-L",
+                "GB-M",
+                "GB-N",
+                "GB-P",
                 "AU-NSW",
                 "AU-VIC",
                 "AU-QLD",
@@ -253,7 +267,7 @@
     "/signal/cheapest-hours": {
       "get": {
         "summary": "Cheapest Hours + Automation Signals (TIMING)",
-        "description": "Returns the cheapest hours in the next 24h and automation-ready signals.\n\nUse this tool when the user wants to know WHEN to use electricity: charging EV, running dishwasher, heating sauna, running heat pump, scheduling high-load tasks, etc.\n\nAlso use for ambiguous questions like 'is electricity cheap now?' or 'when should I run X?' — this tool returns energy_state context alongside timing signals.\n\nKey fields for agents:\n- current_hour_is_cheap (boolean) — is right now in the cheap window?\n- hours_until_next_cheap — 0 = start now, N = wait N hours\n- cheap_window_ends — when the current cheap block ends\n- next_cheap_hour — when to start if not currently cheap\n- best_3h_window — optimal consecutive 3-hour block for uninterruptible tasks\n- recommendation (run_high_consumption_tasks / normal_usage / avoid_high_consumption)\n- avoid_hours — specific hours to skip (grid stress peaks)\n\nAll timestamps are UTC. Convert to user's local timezone before presenting.\ndata_complete: false means treat all signals with caution — incomplete day-ahead data.\n\nNOT available (returns available: false): AU, NZ, KR, ZA, PH-* — no public day-ahead data or fixed tariff.\nJP zones return JEPX day-ahead data. GB returns Octopus Agile half-hourly data.\nMX zones return CENACE day-ahead data.\n\nTool priority:\n- Current price only → /signal/spot\n- Timing / scheduling → /signal/cheapest-hours (this tool)\n- Contract or switching advice → /signal/contract",
+        "description": "Returns the cheapest hours in the next 24h and automation-ready signals.\n\nUse this tool when the user wants to know WHEN to use electricity: charging EV, running dishwasher, heating sauna, running heat pump, scheduling high-load tasks, etc.\n\nAlso use for ambiguous questions like 'is electricity cheap now?' or 'when should I run X?' — this tool returns energy_state context alongside timing signals.\n\nKey fields for agents:\n- current_hour_is_cheap (boolean) — is right now in the cheap window?\n- hours_until_next_cheap — 0 = start now, N = wait N hours\n- cheap_window_ends — when the current cheap block ends\n- next_cheap_hour — when to start if not currently cheap\n- best_3h_window — optimal consecutive 3-hour block for uninterruptible tasks\n- recommendation (run_high_consumption_tasks / normal_usage / avoid_high_consumption)\n- avoid_hours — specific hours to skip (grid stress peaks)\n\nAll timestamps are UTC. Convert to user's local timezone before presenting.\ndata_complete: false means treat all signals with caution — incomplete day-ahead data.\n\nNOT available (returns available: false): AU, NZ, KR, ZA, PH-* — no public day-ahead data or fixed tariff.\nJP zones return JEPX day-ahead data. GB and GB-A..GB-P return Octopus Agile half-hourly data.\nMX zones return CENACE day-ahead data.\n\nTool priority:\n- Current price only → /signal/spot\n- Timing / scheduling → /signal/cheapest-hours (this tool)\n- Contract or switching advice → /signal/contract",
         "operationId": "getCheapestHours",
         "parameters": [
           {
@@ -311,6 +325,20 @@
                 "MK",
                 "IE",
                 "GB",
+                "GB-A",
+                "GB-B",
+                "GB-C",
+                "GB-D",
+                "GB-E",
+                "GB-F",
+                "GB-G",
+                "GB-H",
+                "GB-J",
+                "GB-K",
+                "GB-L",
+                "GB-M",
+                "GB-N",
+                "GB-P",
                 "AU-NSW",
                 "AU-VIC",
                 "AU-QLD",
@@ -373,7 +401,7 @@
                 "MX-CUN"
               ]
             },
-            "description": "Market zone. AU, NZ, KR, KR-JEJU, ZA, PH-* return available: false. JP zones return JEPX day-ahead data. GB returns Octopus Agile half-hourly data. MX zones return CENACE day-ahead data."
+            "description": "Market zone. AU, NZ, KR, KR-JEJU, ZA, PH-* return available: false. JP zones return JEPX day-ahead data. GB and GB-A..GB-P return Octopus Agile half-hourly data. MX zones return CENACE day-ahead data."
           },
           {
             "name": "hours",
@@ -544,7 +572,7 @@
     "/signal/contract": {
       "get": {
         "summary": "Contract Comparison and Switching Recommendation (CONTRACT)",
-        "description": "Returns contract recommendations, switching advice, and estimated annual savings.\n\nUse this when the question involves:\n- Which electricity contract is best\n- Should I switch provider\n- How much can I save\n- Spot vs fixed contract comparison\n\nThis endpoint includes current spot price — no need to call /signal/spot separately.\n\nContract comparison available: FI, SE, NO, DK, DE, GB, AU-*, NZ-*.\nFor ZA and PH: returns regulated tariff data (price_type: regulated) — no contract switching available.\nFor MX, KR, JP, and other zones: returns spot price with a note that contract comparison is not available.\n\nConsumption defaults by market: Nordic 2000, DE 3500, GB 2700, AU 4500, NZ 8000 kWh/year.\nSet heating=electric for heat pumps or floor heating.\n\nKey fields:\n- switch_recommended (bool)\n- best_spot / best_fixed — top contracts by type\n- recommended.contract — overall recommendation with reason\n- action.expected_savings_local_year — annual savings in local currency\n- action.action_link — direct affiliate link for switching\n\nTool priority:\n- Current price only → /signal/spot\n- Timing / scheduling → /signal/cheapest-hours\n- Contract or switching advice → /signal/contract (this tool)",
+        "description": "Returns contract recommendations, switching advice, and estimated annual savings.\n\nUse this when the question involves:\n- Which electricity contract is best\n- Should I switch provider\n- How much can I save\n- Spot vs fixed contract comparison\n\nThis endpoint includes current spot price — no need to call /signal/spot separately.\n\nContract comparison available: FI, SE, NO, DK, DE, GB, AU-*, NZ-*. This does NOT include GB's regional sub-zones (GB-A..GB-P) — those return spot price only, with contract_comparison: not_available.\nFor ZA and PH: returns regulated tariff data (price_type: regulated) — no contract switching available.\nFor MX, KR, JP, and other zones: returns spot price with a note that contract comparison is not available.\n\nConsumption defaults by market: Nordic 2000, DE 3500, GB 2700, AU 4500, NZ 8000 kWh/year.\nSet heating=electric for heat pumps or floor heating.\n\nKey fields:\n- switch_recommended (bool)\n- best_spot / best_fixed — top contracts by type\n- recommended.contract — overall recommendation with reason\n- action.expected_savings_local_year — annual savings in local currency\n- action.action_link — direct affiliate link for switching\n\nTool priority:\n- Current price only → /signal/spot\n- Timing / scheduling → /signal/cheapest-hours\n- Contract or switching advice → /signal/contract (this tool)",
         "operationId": "getContractComparison",
         "parameters": [
           {
@@ -602,6 +630,20 @@
                 "MK",
                 "IE",
                 "GB",
+                "GB-A",
+                "GB-B",
+                "GB-C",
+                "GB-D",
+                "GB-E",
+                "GB-F",
+                "GB-G",
+                "GB-H",
+                "GB-J",
+                "GB-K",
+                "GB-L",
+                "GB-M",
+                "GB-N",
+                "GB-P",
                 "AU-NSW",
                 "AU-VIC",
                 "AU-QLD",
@@ -664,7 +706,7 @@
                 "MX-CUN"
               ]
             },
-            "description": "Market zone. Contract comparison available for: FI, SE, NO, DK, DE, GB, AU-*, NZ-*. All other zones return spot price with contract_comparison: not_available."
+            "description": "Market zone. Contract comparison available for: FI, SE, NO, DK, DE, GB, AU-*, NZ-*. All other zones — including GB's regional sub-zones (GB-A..GB-P) — return spot price with contract_comparison: not_available."
           },
           {
             "name": "consumption",
@@ -1003,7 +1045,7 @@
                     },
                     "version": {
                       "type": "string",
-                      "example": "1.9.6"
+                      "example": "1.9.7"
                     }
                   }
                 }
